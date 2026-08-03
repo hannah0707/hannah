@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+ <meta name="theme-color" content="#FFF5F8">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="default">
+ <title> Hannah 的像素工作台</title>
+ <link rel="stylesheet" href="css/style.css">
+ <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22https://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+</head>
+<body class="theme-pink">
+ <div class="app">
+ <!-- 侧边栏 -->
+ <aside class="sidebar" id="sidebar">
+ <div class="sidebar-header" id="sidebarProfile">
+ <img class="sidebar-avatar" id="sidebarAvatar" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAADvSURBVGje7ZjbDcMgDEXDEN0nQ4Rkhy7RKToE2adLdIeKAuZlCBmA66OqkuPjHwSy5WURBGEeHjqyukClYAO2XXo/PcYbrvIZojcVQ9o+bcKR7d6I//Rxg7RVSZMRK1PZCmmXdGOHUOz6NMUWe2hzxG48+gHapUUNbNaoEGzVPq2mgDcqFPvmmXWPDcnew7wbeFlrf8kLgy+orVPBYYlPUjWyTT0723wOBrXzxTrs15QrhWzXNflMcwrNbrvUVYhlu2mmG/3zfYo2m30wbM3T/PjOi3lwfpv2krSGazFpd4lm1+vajsFeE8AWBEGYhT++tQ4KjDXcjwAAAABJRU5ErkJggg==" alt="avatar">
+ <div class="sidebar-profile-info">
+ <div class="sidebar-nickname" id="sidebarNickname">Hannah</div>
+ <div class="sidebar-subtitle">PIXEL WORKBENCH</div>
+ </div>
+ </div>
+
+ <div class="nav-item active" data-view="dashboard" data-icon="0a0950cdeb7b66a240c38b00c11d5395.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">桌面</div>
+ </div>
+ <div class="nav-item" data-view="schedule" data-icon="1c280bbdd65d06b5e664175ab9ac69b4.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">日程</div>
+ </div>
+ <div class="nav-item" data-view="diary" data-icon="2ac8f9325a5af6ed3f77501d6d1d6fb6.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">日记</div>
+ </div>
+ <div class="nav-item" data-view="reading" data-icon="7c80a70aeed609066e30be12e1ae51fa.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">阅读</div>
+ </div>
+ <div class="nav-item" data-view="inspiration" data-icon="7f8afddb5e863c9c7ef95e4c49356f66.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">灵感</div>
+ </div>
+ <div class="nav-item" data-view="english" data-icon="50b0c14c03be1d6bab6eabdadc12058a.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">英语</div>
+ </div>
+ <div class="nav-item" data-view="hr" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">HR</div>
+ </div>
+ <div class="nav-item" data-view="talent-pool" data-icon="e22f0c10d68698c28c4b6ac95ab13915.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">人才库</div>
+ </div>
+ <div class="nav-item" data-view="fitness" data-icon="0932cdaca17d51e79a69ebb930649529.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">健身</div>
+ </div>
+ <div class="nav-item" data-view="portfolio" data-icon="7132168e66e8204922d710b561269aa2.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">作品集</div>
+ </div>
+ <div class="nav-item" data-view="finance" data-icon="c2b9750f9f7ec39abc8664e2c13d3784.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">记账</div>
+ </div>
+ <div class="nav-item" data-view="focus" data-icon="1d657cd930ec753bce5d01932269936a.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">专注</div>
+ </div>
+ <div class="nav-item" data-view="settings" data-icon="d97bb7cb32ce65846faf77921bfee12a.png">
+ <div class="nav-icon"></div>
+ <div class="nav-label">设置</div>
+ </div>
+ <button class="theme-quick-btn" id="themeQuickBtn" title="切换主题" aria-label="切换主题">🎨 切换主题</button>
+ </aside>
+
+ <!-- 🏠 主内容 -->
+ <main class="main">
+ <!-- 顶部状态栏 -->
+ <div class="top-bar">
+ <div class="top-time" id="topTime">00:00</div>
+ <div class="top-info">
+ <span class="icon">📶</span>
+ <span class="icon">📡</span>
+ <span class="icon">🔋</span>
+ <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="打开分栏导航菜单" title="分栏导航">☰</button>
+ </div>
+ </div>
+
+ <!-- 桌面视图 -->
+ <section class="view active" id="view-dashboard">
+ <!-- 欢迎卡 + 桌面助手状态 -->
+ <div class="welcome-card">
+ <div class="welcome-text">
+ <div class="welcome-greeting" id="welcomeText">午安，<span class="name">Hannah</span>～</div>
+ <div class="welcome-msg" id="welcomeMsg">今天也要加油哦 </div>
+ <div class="welcome-progress">
+ <div class="progress-bar">
+ <div class="progress-fill" id="dailyProgressFill" style="width: 0%"></div>
+ </div>
+ <div class="progress-text" id="dailyProgressText">0%</div>
+ </div>
+ </div>
+ <!-- 桌面宠物（小狗）已抽出为全屏浮层 #desktopPet，本卡只保留三枚状态徽章 -->
+ <div class="pet-status-strip" title="点桌面上的小狗摸它一下就能恢复心情啦">
+ <span class="mstat mstat-energy" id="mascotEnergy"> 0</span>
+ <span class="mstat mstat-health" id="mascotHealth"> 70</span>
+ <span class="mstat mstat-mood" id="mascotMood"> 70</span>
+ <button class="pet-call-btn" id="petToggleBtn" title="显示 / 隐藏小狗">🐶 显示小狗</button>
+ <button class="pet-call-btn" id="petCallBtn" title="把狗狗叫过来">🦴 叫过来</button>
+ </div>
+ </div>
+
+ <!-- 4格统计 -->
+ <div class="stats-grid">
+ <div class="stat-card" style="--accent: var(--pink-500)">
+ <span class="stat-icon">📅</span>
+ <div class="stat-value" id="statTodayEvents">0</div>
+ <div class="stat-label">今日日程</div>
+ </div>
+ <div class="stat-card" style="--accent: var(--keroppi-green)">
+ <span class="stat-icon">📚</span>
+ <div class="stat-value" id="statReadingPages">0</div>
+ <div class="stat-label">今日阅读(页)</div>
+ </div>
+ <div class="stat-card" style="--accent: var(--cinnamoroll-blue)">
+ <span class="stat-icon">💪</span>
+ <div class="stat-value" id="statWorkoutMin">0</div>
+ <div class="stat-label">今日运动(分)</div>
+ </div>
+ <div class="stat-card" style="--accent: var(--pompompurin-yellow)">
+ <span class="stat-icon">📝</span>
+ <div class="stat-value" id="statWords">0</div>
+ <div class="stat-label">今日字数</div>
+ </div>
+ </div>
+
+ <!-- 今日要做 -->
+ <div class="card" id="careReminder">
+ <div class="card-title-row">
+ <div class="card-title">📋 今日要做</div>
+ <span class="points-badge" id="pointsBadge"> 0 积分</span>
+ <button class="btn primary btn-sm" id="addTaskBtn">＋ 添加任务</button>
+ </div>
+ <div class="task-suggest" id="taskSuggest"></div>
+ <div class="task-list" id="taskList"></div>
+ </div>
+
+ <!-- 最近动态 -->
+ <div class="card">
+ <div class="card-title">📝 最近动态</div>
+ <div id="recentFeed"></div>
+ </div>
+ </section>
+
+ <!-- 日程视图 -->
+ <section class="view" id="view-schedule">
+ <div class="card">
+ <div class="card-title">📅 日程</div>
+ <div class="calendar" id="calendar"></div>
+ </div>
+ </section>
+
+ <!-- 日记视图 -->
+ <section class="view" id="view-diary">
+ <!-- 双 Tab 区分：今天（写日记）/ 日记（查看历史） -->
+ <div class="diary-tabs">
+ <button class="diary-tab active" data-diarytab="today">
+ <span class="diary-tab-icon">✏</span>
+ <span class="diary-tab-label">今天</span>
+ <span class="diary-tab-hint">写日记 · 打卡</span>
+ </button>
+ <button class="diary-tab" data-diarytab="history">
+ <span class="diary-tab-icon">📅</span>
+ <span class="diary-tab-label">日记</span>
+ <span class="diary-tab-hint">日历 · 历史</span>
+ </button>
+ </div>
+
+ <!-- 今天 Tab：写日记 + 打卡 -->
+ <div class="diary-panel" id="diaryPanelToday">
+ <div class="card">
+ <div class="card-title">📖 今日日记 <span id="diaryTodayLabel" class="diary-today-label">—</span></div>
+ <div class="mood-picker" id="moodPicker"></div>
+ <div class="weather-picker" id="weatherPicker"></div>
+ <textarea class="diary-textarea" id="diaryContent" placeholder="写下今天的故事吧～"></textarea>
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+ <div style="font-family: 'Press Start 2P',monospace; font-size: 9px; color: var(--text-mid);" id="diarySaveStatus">已自动保存</div>
+ <div>
+ <button class="btn" id="diaryCheckinBtn">✓ 今日打卡</button>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 日记 Tab：日历总览 + 历史 -->
+ <div class="diary-panel" id="diaryPanelHistory" style="display:none;">
+ <div class="card">
+ <div class="card-title-row">
+ <div class="card-title">📅 日记日历</div>
+ <div class="diary-cal-nav">
+ <button class="cal-nav-btn" id="diaryPrevMonth" title="上个月">◀</button>
+ <span class="diary-cal-title" id="diaryCalTitle">—</span>
+ <button class="cal-nav-btn" id="diaryNextMonth" title="下个月">▶</button>
+ </div>
+ </div>
+ <div class="diary-calendar" id="diaryCalendar">
+ <div class="diary-cal-legend">
+ <span>🟢 积极心情 · ⚪ 中性 · 🔵 消极（背景色）</span>
+ <span class="legend-hint">点击任意一天可选中并编辑（含补卡）</span>
+ </div>
+ <div class="diary-cal-grid" id="diaryCalGrid"></div>
+ </div>
+ <!-- 选中日期编辑面板已移除：该功能与「今天」Tab 的写日记 + 打卡重复，保留日历只读展示 -->
+ </div>
+
+ <!-- 📊 统计卡片 + 筛选 chips（语义化、可操作） -->
+ <div class="card">
+ <div id="diaryStatsWrap"></div>
+ <div class="diary-filter-bar" id="diaryMoodFilter"></div>
+ <div class="diary-filter-bar" id="diaryWeatherFilter"></div>
+ <div class="diary-filter-actions">
+ <button class="btn" id="diaryClearFilterBtn">✕ 清除筛选</button>
+ </div>
+ </div>
+
+ <div class="card">
+ <div class="card-title">📜 历史日记</div>
+ <div id="diaryHistoryPickerWrap"></div>
+ <div id="diaryHistory"></div>
+ </div>
+ </div>
+ </section>
+
+ <!-- 阅读视图 -->
+ <section class="view" id="view-reading">
+ <div class="book-recommend-section">
+ <div class="section-header">
+ <div class="section-title">📖 今日书单推荐</div>
+ <div class="section-header-right">
+ <div class="section-date" id="bookRecommendDate">2026-08-02</div>
+ <button class="inspiration-refresh" id="bookRefreshBtn" title="重新推荐一批书籍">🔄 换一批</button>
+ </div>
+ </div>
+ <div class="book-type-tabs" id="bookTypeTabs"></div>
+ <div class="book-list" id="bookRecommendList"></div>
+ </div>
+
+ <div class="card">
+ <div class="card-title">📚 我的书架</div>
+ <!-- 分类栏：横向排列于顶部，样式与「今日书单推荐」的 .book-type-tabs 一致 -->
+ <div class="book-type-tabs shelf-status-tabs" id="bookShelfTabs"></div>
+ <div class="bookshelf" id="bookshelf"></div>
+ <button class="add-portfolio-btn" id="addBookBtn" style="margin-top: 12px;">+ 添加书籍</button>
+ <div style="margin-top: 12px;">
+ <button class="btn primary" id="logReadingBtn">+ 记录今日阅读</button>
+ </div>
+ </div>
+
+ <div class="reading-stats">
+ <div class="reading-stat">
+ <div class="reading-stat-value" id="readingToday">0</div>
+ <div class="reading-stat-label">今日阅读(页)</div>
+ </div>
+ <div class="reading-stat">
+ <div class="reading-stat-value" id="readingMonth">0</div>
+ <div class="reading-stat-label">本月阅读(页)</div>
+ </div>
+ <div class="reading-stat">
+ <div class="reading-stat-value" id="readingYear">0</div>
+ <div class="reading-stat-label">本年阅读(页)</div>
+ </div>
+ </div>
+
+ <div class="card">
+ <div class="card-title">📅 月度阅读曲线</div>
+ <div class="sanrio-bars" id="monthReadingChart"></div>
+ </div>
+
+ <div class="card">
+ <div class="card-title">📅 年度阅读总览</div>
+ <div id="yearOverview"></div>
+ </div>
+ </section>
+
+ <!-- 灵感视图 -->
+ <section class="view" id="view-inspiration">
+ <div class="inspiration-search">
+ <span class="search-icon">🔍</span>
+ <input class="search-input" id="inspirationSearch" placeholder="搜索灵感关键词...">
+ <button class="search-btn">搜索</button>
+ <button class="inspiration-refresh" id="inspirationRefresh" title="重新推送一批灵感">🔄 换一批</button>
+ </div>
+ <div class="inspiration-source-tabs" id="sourceTabs"></div>
+ <div class="inspiration-list" id="inspirationList"></div>
+ <div style="text-align: center; padding: 12px; color: var(--text-mid); font-size: 12px; font-family: 'Pixelify Sans',sans-serif;" id="inspirationDate"></div>
+ </section>
+
+ <!-- 英语学习视图 -->
+ <section class="view" id="view-english">
+ <div class="learn-content">
+ <div class="learn-day-header">
+ <div class="learn-day-title">🎓 今日英语 · <span id="englishDate"></span></div>
+ <div class="learn-streak" id="englishStreak"> 连续 0 天</div>
+ </div>
+
+ <!-- 学习目标选择 -->
+ <div class="learn-block">
+ <div class="learn-block-title">🎯 学习目标</div>
+ <div class="goal-selector" id="goalSelector"></div>
+ <div class="goal-stats" id="goalStats"></div>
+ </div>
+
+ <!-- 月度自测提示 -->
+ <div id="monthlyTestBanner" style="display:none;"></div>
+
+ <!-- 单词学习区 -->
+ <div class="learn-block">
+ <div class="learn-block-title">
+ 📝 今日单词 <span id="englishTheme" style="color: var(--cinnamoroll-blue); font-size: 12px;"></span>
+ <span id="wordProgress" style="float:right; font-size:12px; color:var(--text-mid);"></span>
+ </div>
+ <div class="learn-word-list" id="englishWords"></div>
+ <div class="word-tip" style="margin-top:8px; font-size:11px; color:var(--text-mid); font-family:'Pixelify Sans',sans-serif;">
+ 💡 点击单词展开详情 · 长按标记 掌握/模糊/忘记
+ </div>
+ </div>
+
+ <div class="learn-block">
+ <div class="learn-block-title">📖 今日语法点</div>
+ <div id="englishGrammar"></div>
+ </div>
+
+ <div class="learn-block">
+ <div class="learn-block-title"> 今日一句</div>
+ <div class="learn-tip" id="englishSentence"></div>
+ </div>
+
+ <div class="learn-block">
+ <div class="learn-block-title">🎬 推荐学习视频</div>
+ <div class="learn-resource-list" id="englishResources"></div>
+ </div>
+
+ <div style="text-align: right; margin-top: 12px;">
+ <button class="btn primary" id="englishCheckinBtn">✓ 完成今日打卡</button>
+ </div>
+ </div>
+ </section>
+
+ <!-- 人力资源视图 -->
+ <section class="view" id="view-hr">
+ <div class="learn-content">
+ <div class="learn-day-header">
+ <div class="learn-day-title">👥 今日 HR · <span id="hrDate"></span> <span id="hrTheme" style="color: var(--kuromi-purple); font-size: 12px;"></span></div>
+ <div class="learn-streak" id="hrStreak"> 连续 0 天</div>
+ </div>
+
+ <div class="learn-block">
+ <div class="learn-block-title">
+ 📚 今日知识点
+ <button class="inspiration-refresh" id="hrRefreshBtn" title="换一批知识点">🔄 换一批</button>
+ </div>
+ <div id="hrKnowledge"></div>
+ </div>
+
+ <div class="learn-block">
+ <div class="learn-block-title">🎬 推荐学习视频</div>
+ <div class="learn-resource-list" id="hrResources"></div>
+ </div>
+
+ <div style="text-align: right; margin-top: 12px;">
+ <button class="btn primary" id="hrCheckinBtn">✓ 完成今日打卡</button>
+ </div>
+ </div>
+ </section>
+
+ <!-- 人才库视图（人事招聘系统） -->
+ <section class="view" id="view-talent-pool">
+ <div class="talent-pool-header">
+ <div class="talent-pool-title">
+ <span class="talent-pool-emoji"></span>
+ <span>人才库</span>
+ <span class="talent-pool-subtitle">Talent Pool · 招聘负责人的专属简历库</span>
+ </div>
+ </div>
+
+ <!-- 4 格统计 -->
+ <div class="talent-stats-grid">
+ <div class="talent-stat-card" style="--accent: var(--pink-500)">
+ <span class="talent-stat-icon">👥</span>
+ <div class="talent-stat-value" id="tpTotal">0</div>
+ <div class="talent-stat-label">候选人总数</div>
+ </div>
+ <div class="talent-stat-card" style="--accent: var(--keroppi-green)">
+ <span class="talent-stat-icon">📅</span>
+ <div class="talent-stat-value" id="tpToday">0</div>
+ <div class="talent-stat-label">今日新增</div>
+ </div>
+ <div class="talent-stat-card" style="--accent: var(--cinnamoroll-blue)">
+ <span class="talent-stat-icon">📞</span>
+ <div class="talent-stat-value" id="tpPhone">0</div>
+ <div class="talent-stat-label">已识别电话</div>
+ </div>
+ <div class="talent-stat-card" style="--accent: var(--pompompurin-yellow)">
+ <span class="talent-stat-icon">📧</span>
+ <div class="talent-stat-value" id="tpEmail">0</div>
+ <div class="talent-stat-label">已识别邮箱</div>
+ </div>
+ </div>
+
+ <!-- 检索 + 操作区 -->
+ <div class="card talent-toolbar-card">
+ <div class="talent-toolbar">
+ <div class="talent-search-box">
+ <span class="talent-search-icon">🔍</span>
+ <input class="talent-search-input" id="tpSearchInput" placeholder="搜索职务 / 标签 / 姓名 / 公司…">
+ <button class="btn primary talent-search-btn" id="tpSearchBtn">🔎 检索</button>
+ <button class="btn talent-clear-btn" id="tpClearBtn">✕ 清空</button>
+ </div>
+ <div class="talent-toolbar-actions">
+ <label class="btn primary talent-import-label">
+ 📥 导入简历
+ <input type="file" id="tpFileInput" accept=".pdf,.txt,.doc,.docx,.md" hidden multiple>
+ </label>
+ <button class="btn talent-manual-btn" id="tpManualBtn">✍ 手动新建</button>
+ </div>
+ </div>
+ <!-- 标签云（按现有人才库数据动态生成，支持多选） -->
+ <div class="talent-tag-head">
+ <span class="talent-tag-head-title"> 检索标签 · 可多选</span>
+ <div class="talent-tag-mode" id="tpTagMode">
+ <button class="talent-mode-btn active" data-mode="or" title="命中任意一个已选标签即可">任意 OR</button>
+ <button class="talent-mode-btn" data-mode="and" title="必须同时命中全部已选标签">全部 AND</button>
+ </div>
+ </div>
+ <div class="talent-tag-cloud" id="tpTagCloud"></div>
+ <div class="talent-selected-bar" id="tpSelectedBar" style="display:none;"></div>
+ <div class="talent-result-meta" id="tpResultMeta"></div>
+ </div>
+
+ <!-- 批量管理条 -->
+ <div class="talent-bulk-bar" id="tpBulkBar">
+ <div class="talent-bulk-left">
+ <button class="btn talent-bulk-toggle" id="tpBulkToggle">☑ 批量管理</button>
+ <div class="talent-bulk-actions" id="tpBulkActions" style="display:none;">
+ <button class="btn" id="tpBulkSelectAll">全选当前</button>
+ <button class="btn" id="tpBulkInvert">反选</button>
+ <span class="talent-bulk-count" id="tpBulkCount">已选 0 人</span>
+ <button class="btn danger" id="tpBulkDelete">🗑 删除选中</button>
+ <button class="btn" id="tpBulkCancel">退出</button>
+ </div>
+ </div>
+ <button class="btn danger talent-clear-all" id="tpClearAll">🧹 清空人才库</button>
+ </div>
+
+ <!-- 候选人网格 -->
+ <div class="talent-grid" id="talentGrid"></div>
+ <div class="talent-empty" id="talentEmpty" style="display:none;">
+ <div class="talent-empty-emoji"></div>
+ <div class="talent-empty-title">人才库还是空的</div>
+ <div class="talent-empty-hint">点击「📥 导入简历」批量上传，或「✍ 手动新建」录入你的第一个人才吧～</div>
+ </div>
+ </section>
+
+ <!-- 健身视图 -->
+ <section class="view" id="view-fitness">
+ <div class="workout-wizard">
+ <div class="card-title">💪 今日运动顾问</div>
+
+ <div class="wizard-step">
+ <div class="wizard-step-title">1⃣ 今天的运动场景？</div>
+ <div class="wizard-options" id="workoutScene">
+ <div class="wizard-option" data-scene="home">🏠 居家</div>
+ <div class="wizard-option" data-scene="gym">🏋 健身房</div>
+ <div class="wizard-option" data-scene="swim">🏊 游泳</div>
+ <div class="wizard-option" data-scene="outdoor">🌳 户外</div>
+ </div>
+ </div>
+
+ <div class="wizard-step">
+ <div class="wizard-step-title">2⃣ 想锻炼的部位？（可多选）</div>
+ <div class="wizard-options" id="workoutPart">
+ <div class="wizard-option" data-part="full"> 全身</div>
+ <div class="wizard-option" data-part="core">🧘 核心/腰腹</div>
+ <div class="wizard-option" data-part="leg">🦵 腿部</div>
+ <div class="wizard-option" data-part="arm">💪 手臂</div>
+ <div class="wizard-option" data-part="back">🏋 背部</div>
+ <div class="wizard-option" data-part="hip"> 臀腿</div>
+ <div class="wizard-option" data-part="cardio"> 有氧</div>
+ <div class="wizard-option" data-part="stretch"> 拉伸</div>
+ </div>
+ </div>
+
+ <div class="wizard-step">
+ <div class="wizard-step-title">3⃣ 时长？</div>
+ <div class="wizard-options" id="workoutDuration">
+ <div class="wizard-option" data-dur="15">⏱ 15分钟</div>
+ <div class="wizard-option" data-dur="30">⏱ 30分钟</div>
+ <div class="wizard-option" data-dur="45">⏱ 45分钟</div>
+ <div class="wizard-option" data-dur="60">⏱ 60分钟</div>
+ </div>
+ </div>
+
+ <button class="btn primary" id="getRecommendBtn" style="width: 100%; padding: 12px; font-size: 15px;">🎯 为我推荐跟练</button>
+
+ <div class="wizard-recommend" id="workoutRecommend" style="display: none;">
+ <div class="recommend-title">🎬 你的专属跟练方案</div>
+ <div id="workoutRecommendList"></div>
+ <button class="start-workout-btn" id="startWorkoutBtn"> 开始运动</button>
+ </div>
+ </div>
+
+ <div class="card">
+ <div class="card-title">📊 运动记录</div>
+ <div id="fitnessRecords"></div>
+ </div>
+ </section>
+
+ <!-- 作品集视图 -->
+ <section class="view" id="view-portfolio">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+ <div class="card-title" style="margin: 0; border: none; padding: 0;">🎮 作品集</div>
+ <button class="add-portfolio-btn" id="addPortfolioBtn">+ 添加作品</button>
+ </div>
+ <div class="portfolio-list" id="portfolioList"></div>
+ </section>
+
+ <!-- 记账视图 -->
+ <section class="view" id="view-finance">
+ <div class="finance-summary">
+ <div class="finance-card income">
+ <span class="finance-icon"></span>
+ <div class="finance-value" id="totalIncome">¥0</div>
+ <div class="finance-label">本月收入</div>
+ </div>
+ <div class="finance-card expense">
+ <span class="finance-icon"></span>
+ <div class="finance-value" id="totalExpense">¥0</div>
+ <div class="finance-label">本月支出</div>
+ </div>
+ <div class="finance-card balance">
+ <span class="finance-icon"></span>
+ <div class="finance-value" id="totalBalance">¥0</div>
+ <div class="finance-label">结余</div>
+ </div>
+ </div>
+
+ <div class="sanrio-chart">
+ <div class="sanrio-chart-title">📊 本周支出（按日）</div>
+ <div class="sanrio-bars" id="weekChart"></div>
+ </div>
+
+ <div class="sanrio-chart">
+ <div class="sanrio-chart-title"> 支出分类</div>
+ <div class="sanrio-pie">
+ <div class="sanrio-pie-canvas" id="pieChart"></div>
+ <div class="pie-legend" id="pieLegend"></div>
+ </div>
+ </div>
+
+ <div class="finance-records">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+ <div class="card-title" style="margin: 0; border: none; padding: 0;"> 账目明细</div>
+ <div>
+ <button class="btn" id="addIncomeBtn" style="margin-right: 6px;">+ 收入</button>
+ <button class="btn primary" id="addExpenseBtn">+ 支出</button>
+ </div>
+ </div>
+ <div id="financeRecords"></div>
+ </div>
+ </section>
+
+ <!-- 番茄钟 / 专注视图 -->
+ <section class="view" id="view-focus">
+ <!-- 内部标签页：计时 / 月度总览 / 年度总览 -->
+ <div class="focus-tabs">
+ <button class="focus-tab active" data-focustab="timer">⏱ 专注计时</button>
+ <button class="focus-tab" data-focustab="month">📅 月度总览</button>
+ <button class="focus-tab" data-focustab="year">📆 年度总览</button>
+ </div>
+
+ <!-- 计时面板 -->
+ <div class="focus-panel" id="focusTimerPanel">
+ <div class="focus-mode-toggle">
+ <button class="mode-btn active" data-mode="cd">⏳ 倒计时</button>
+ <button class="mode-btn" data-mode="up">⏱ 正计时</button>
+ </div>
+
+ <!-- 倒计时时长选择（正计时时隐藏） -->
+ <div class="focus-duration" id="focusDurationBox">
+ <div class="duration-presets">
+ <button class="dur-btn" data-min="15">15</button>
+ <button class="dur-btn active" data-min="25">25</button>
+ <button class="dur-btn" data-min="45">45</button>
+ <button class="dur-btn" data-min="60">60</button>
+ </div>
+ <div class="duration-custom">
+ <span class="dc-label">自定义</span>
+ <input type="number" id="focusCustomMin" min="1" max="180" placeholder="分钟">
+ <span class="dc-unit">分</span>
+ </div>
+ </div>
+
+ <div class="focus-clock">
+ <div class="focus-time" id="focusTime">25:00</div>
+ <div class="focus-progress" id="focusProgressWrap" style="display:none;">
+ <div class="focus-progress-fill" id="focusProgressFill"></div>
+ </div>
+ <div class="focus-energy-preview" id="focusEnergyPreview"> 本次预计能量 +0</div>
+ </div>
+
+ <div class="focus-controls">
+ <button class="btn primary" id="focusStartBtn">▶ 开始</button>
+ <button class="btn" id="focusPauseBtn" style="display:none;">⏸ 暂停</button>
+ <button class="btn danger" id="focusStopBtn" style="display:none;">⏹ 结束</button>
+ </div>
+ </div>
+
+ <!-- 月度专注总览 -->
+ <div class="focus-panel" id="focusMonthPanel" style="display:none;">
+ <div class="focus-summary">
+ <div class="focus-sum-card"><div class="fs-value" id="monthTotalMin">0</div><div class="fs-label">本月专注(分)</div></div>
+ <div class="focus-sum-card"><div class="fs-value" id="monthTotalCount">0</div><div class="fs-label">本月次数</div></div>
+ <div class="focus-sum-card"><div class="fs-value" id="monthTotalEnergy">0</div><div class="fs-label">本月能量</div></div>
+ </div>
+ <div class="card">
+ <div class="card-title">📈 月度专注趋势（按天）</div>
+ <div class="focus-chart-scroll"><div class="sanrio-bars" id="focusMonthChart"></div></div>
+ </div>
+ </div>
+
+ <!-- 年度专注总览 -->
+ <div class="focus-panel" id="focusYearPanel" style="display:none;">
+ <div class="focus-summary">
+ <div class="focus-sum-card"><div class="fs-value" id="yearTotalMin">0</div><div class="fs-label">本年专注(分)</div></div>
+ <div class="focus-sum-card"><div class="fs-value" id="yearTotalCount">0</div><div class="fs-label">本年次数</div></div>
+ <div class="focus-sum-card"><div class="fs-value" id="yearTotalEnergy">0</div><div class="fs-label">本年能量</div></div>
+ </div>
+ <div class="card">
+ <div class="card-title">📈 年度专注趋势（按月）</div>
+ <div class="sanrio-bars" id="focusYearChart"></div>
+ </div>
+ </div>
+ </section>
+
+ <!-- 设置视图 -->
+ <section class="view" id="view-settings">
+ <div class="settings-section">
+ <div class="card-title"> 个人资料</div>
+ <div class="profile-card">
+ <img class="profile-avatar" id="profileAvatar" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAADvSURBVGje7ZjbDcMgDEXDEN0nQ4Rkhy7RKToE2adLdIeKAuZlCBmA66OqkuPjHwSy5WURBGEeHjqyukClYAO2XXo/PcYbrvIZojcVQ9o+bcKR7d6I//Rxg7RVSZMRK1PZCmmXdGOHUOz6NMUWe2hzxG48+gHapUUNbNaoEGzVPq2mgDcqFPvmmXWPDcnew7wbeFlrf8kLgy+orVPBYYlPUjWyTT0723wOBrXzxTrs15QrhWzXNflMcwrNbrvUVYhlu2mmG/3zfYo2m30wbM3T/PjOi3lwfpv2krSGazFpd4lm1+vajsFeE8AWBEGYhT++tQ4KjDXcjwAAAABJRU5ErkJggg==" alt="头像">
+ <div class="profile-info">
+ <div class="profile-name" id="profileName">Hannah</div>
+ <div class="profile-bio">写作 · 阅读 · 健身 · 学习</div>
+ </div>
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">昵称</span>
+ <input class="settings-input" id="nicknameInput" placeholder="Hannah">
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">城市</span>
+ <input class="settings-input" id="cityInput" placeholder="未设置">
+ </div>
+ <div class="avatar-upload-area">
+ <div class="avatar-label">上传自定义头像</div>
+ <div class="avatar-upload-box" id="avatarUploadBox">
+ <span style="font-size: 32px;">📷</span>
+ <span style="font-family: 'Pixelify Sans',sans-serif; font-size: 12px; color: var(--text-mid);">点击上传头像</span>
+ <input type="file" id="avatarUpload" accept="image/*" style="display:none">
+ </div>
+ </div>
+ </div>
+
+ <div class="settings-section">
+ <div class="card-title">🎨 主题设置</div>
+ <div class="theme-cards" id="themeCardsSettings"></div>
+ </div>
+
+ <div class="settings-section">
+ <div class="card-title">🔗 桌面助手</div>
+ <div class="settings-row">
+ <span class="settings-label">当前助手</span>
+ <span class="settings-label" id="currentMascotName" style="color: var(--pink-500);"> Hello Kitty</span>
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">能量值</span>
+ <span class="settings-label" id="mascotEnergyValue" style="color: var(--pompompurin-yellow);"> 0</span>
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">健康值</span>
+ <span class="settings-label" id="mascotHealthValue" style="color: var(--danger);"> 70</span>
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">心情值</span>
+ <span class="settings-label" id="mascotMoodValue" style="color: var(--accent-green);"> 70</span>
+ </div>
+ </div>
+
+ <div class="settings-section">
+ <div class="card-title"> 数据管理</div>
+ <div class="settings-row">
+ <span class="settings-label">导出数据</span>
+ <button class="settings-btn" id="exportDataBtn">📥 导出 JSON</button>
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">导入数据</span>
+ <button class="settings-btn" id="importDataBtn">📤 导入 JSON</button>
+ <input type="file" id="importFile" style="display:none" accept=".json">
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">清空所有数据</span>
+ <button class="settings-btn danger" id="clearDataBtn">🗑 清空</button>
+ </div>
+ </div>
+
+ <div class="settings-section">
+ <div class="card-title">ℹ 关于</div>
+ <div style="font-family: 'Pixelify Sans',sans-serif; font-size: 13px; color: var(--text-mid); line-height: 1.8;">
+ <strong>像素工作台 v3.0</strong><br>
+ 为 Hannah 量身打造<br>
+ 三丽鸥角色陪你一起成长<br>
+ 每天打卡获取能量，与桌面助手互动
+ </div>
+ </div>
+ </section>
+ </main>
+ </div>
+
+ <!-- 分栏抽屉导航（移动端：右上角 ☰ 触发，展示头像/昵称/分栏图标列表） -->
+ <div class="nav-drawer-backdrop" id="navDrawerBackdrop"></div>
+ <aside class="nav-drawer" id="navDrawer" aria-hidden="true">
+ <div class="drawer-header">
+ <img class="drawer-avatar" id="drawerAvatar" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAADvSURBVGje7ZjbDcMgDEXDEN0nQ4Rkhy7RKToE2adLdIeKAuZlCBmA66OqkuPjHwSy5WURBGEeHjqyukClYAO2XXo/PcYbrvIZojcVQ9o+bcKR7d6I//Rxg7RVSZMRK1PZCmmXdGOHUOz6NMUWe2hzxG48+gHapUUNbNaoEGzVPq2mgDcqFPvmmXWPDcnew7wbeFlrf8kLgy+orVPBYYlPUjWyTT0723wOBrXzxTrs15QrhWzXNflMcwrNbrvUVYhlu2mmG/3zfYo2m30wbM3T/PjOi3lwfpv2krSGazFpd4lm1+vajsFeE8AWBEGYhT++tQ4KjDXcjwAAAABJRU5ErkJggg==" alt="头像">
+ <div class="drawer-profile">
+ <div class="drawer-name" id="drawerName">Hannah</div>
+ <div class="drawer-sub">PIXEL WORKBENCH</div>
+ </div>
+ <button class="drawer-close" id="navDrawerClose" aria-label="关闭菜单">✕</button>
+ </div>
+ <nav class="drawer-nav">
+ <div class="drawer-nav-item active" data-view="dashboard" data-icon="0a0950cdeb7b66a240c38b00c11d5395.png"><div class="nav-icon"></div><div class="nav-label">桌面</div></div>
+ <div class="drawer-nav-item" data-view="schedule" data-icon="1c280bbdd65d06b5e664175ab9ac69b4.png"><div class="nav-icon"></div><div class="nav-label">日程</div></div>
+ <div class="drawer-nav-item" data-view="diary" data-icon="2ac8f9325a5af6ed3f77501d6d1d6fb6.png"><div class="nav-icon"></div><div class="nav-label">日记</div></div>
+ <div class="drawer-nav-item" data-view="reading" data-icon="7c80a70aeed609066e30be12e1ae51fa.png"><div class="nav-icon"></div><div class="nav-label">阅读</div></div>
+ <div class="drawer-nav-item" data-view="inspiration" data-icon="7f8afddb5e863c9c7ef95e4c49356f66.png"><div class="nav-icon"></div><div class="nav-label">灵感</div></div>
+ <div class="drawer-nav-item" data-view="english" data-icon="50b0c14c03be1d6bab6eabdadc12058a.png"><div class="nav-icon"></div><div class="nav-label">英语</div></div>
+ <div class="drawer-nav-item" data-view="hr" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png"><div class="nav-icon"></div><div class="nav-label">HR</div></div>
+ <div class="drawer-nav-item" data-view="talent-pool" data-icon="e22f0c10d68698c28c4b6ac95ab13915.png"><div class="nav-icon"></div><div class="nav-label">人才库</div></div>
+ <div class="drawer-nav-item" data-view="fitness" data-icon="0932cdaca17d51e79a69ebb930649529.png"><div class="nav-icon"></div><div class="nav-label">健身</div></div>
+ <div class="drawer-nav-item" data-view="portfolio" data-icon="7132168e66e8204922d710b561269aa2.png"><div class="nav-icon"></div><div class="nav-label">作品集</div></div>
+ <div class="drawer-nav-item" data-view="finance" data-icon="c2b9750f9f7ec39abc8664e2c13d3784.png"><div class="nav-icon"></div><div class="nav-label">记账</div></div>
+ <div class="drawer-nav-item" data-view="focus" data-icon="1d657cd930ec753bce5d01932269936a.png"><div class="nav-icon"></div><div class="nav-label">专注</div></div>
+ <div class="drawer-nav-item" data-view="settings" data-icon="d97bb7cb32ce65846faf77921bfee12a.png"><div class="nav-icon"></div><div class="nav-label">设置</div></div>
+ </nav>
+ </aside>
+
+ <!-- 浮动按钮 -->
+ <button class="fab" id="fabBtn" style="display: none;">+</button>
+
+ <!-- 模态框容器 -->
+ <div id="modalRoot"></div>
+
+ <!-- 🐶 自由走动的桌面宠物（QQ 宠物式：随机走动、随机活动、可点击对话、可拖拽） -->
+ <div class="desktop-pet" id="desktopPet" aria-label="桌面小狗">
+ <div class="pet-shadow"></div>
+ <div class="pet-sprite" id="petSprite" alt="小狗">
+ <img class="pet-img" id="petImg" src="assets/avatars/pet/happy.gif" alt="小狗" draggable="false">
+ </div>
+ <div class="pet-bubble" id="petBubble">
+ <span class="pet-bubble-text" id="petBubbleText">汪～</span>
+ <span class="pet-bubble-tail"></span>
+ </div>
+ <div class="pet-menu" id="petMenu">
+ <div class="pet-menu-item" data-pet-action="pet"> 摸摸</div>
+ <div class="pet-menu-item" data-pet-action="feed">🦴 喂零食</div>
+ <div class="pet-menu-item" data-pet-action="walk"> 出去遛</div>
+ <div class="pet-menu-item" data-pet-action="sleep"> 睡觉</div>
+ </div>
+ </div>
+
+ <!-- 🎨 主题快速切换浮层 -->
+ <div class="theme-popover-backdrop" id="themePopoverBackdrop"></div>
+ <div class="theme-popover" id="themePopover" role="dialog" aria-label="选择主题">
+ <div class="theme-popover-title">🎨 选择主题</div>
+ <div class="theme-cards" id="themeCardsPopover"></div>
+ </div>
+
+ <script src="js/data.js"></script>
+ <script src="js/api.js"></script>
+ <script src="js/app.js"></script>
+</body>
+</html>
