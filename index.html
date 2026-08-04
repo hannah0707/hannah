@@ -6,11 +6,29 @@
  <meta name="theme-color" content="#FFF5F8">
  <meta name="apple-mobile-web-app-capable" content="yes">
  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+ <meta name="description" content="Hannah 的像素工作台 · 13 个模块，纯前端 + localStorage，4 套主题配色，手机、电脑、平板都能用。">
+ <meta name="keywords" content="像素工作台,像素风,日程,记账,健身,日记,作品集,人才库,阅读,资讯,localStorage">
+ <!-- Open Graph -->
+ <meta property="og:title" content="Hannah 的像素工作台">
+ <meta property="og:description" content="13 个模块 · 纯前端 · 4 套主题 · 一键备份/恢复">
+ <meta property="og:image" content="assets/icons/og-cover.png">
+ <meta property="og:type" content="website">
+ <!-- Twitter -->
+ <meta name="twitter:card" content="summary_large_image">
+ <meta name="twitter:image" content="assets/icons/og-cover.png">
  <title> Hannah 的像素工作台</title>
- <link rel="stylesheet" href="css/style.css">
- <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22https://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+ <link rel="stylesheet" href="css/style.css?v=20260804">
+ <!-- Favicon：优先 SVG（矢量），各 PNG 尺寸覆盖老浏览器/iOS/Android -->
+ <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg">
+ <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png">
+ <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+ <link rel="icon" type="image/png" sizes="48x48" href="assets/icons/icon-48.png">
+ <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+ <link rel="mask-icon" href="assets/icons/favicon.svg" color="#FF8FB1">
+ <link rel="manifest" href="assets/icons/manifest.webmanifest">
 </head>
 <body class="theme-pink">
+ <div id="appBackground"></div>
  <div class="app">
  <!-- 侧边栏 -->
  <aside class="sidebar" id="sidebar">
@@ -42,15 +60,15 @@
  <div class="nav-icon"></div>
  <div class="nav-label">灵感</div>
  </div>
- <div class="nav-item" data-view="english" data-icon="50b0c14c03be1d6bab6eabdadc12058a.png">
+ <div class="nav-item" data-view="vision" data-icon="vision.png">
  <div class="nav-icon"></div>
- <div class="nav-label">英语</div>
+ <div class="nav-label">资讯</div>
  </div>
- <div class="nav-item" data-view="hr" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png">
+ <div class="nav-item" data-view="life" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png">
  <div class="nav-icon"></div>
- <div class="nav-label">HR</div>
+ <div class="nav-label">生活</div>
  </div>
- <div class="nav-item" data-view="talent-pool" data-icon="e22f0c10d68698c28c4b6ac95ab13915.png">
+<div class="nav-item" data-view="talent-pool" data-icon="e22f0c10d68698c28c4b6ac95ab13915.png">
  <div class="nav-icon"></div>
  <div class="nav-label">人才库</div>
  </div>
@@ -71,8 +89,12 @@
  <div class="nav-label">专注</div>
  </div>
  <div class="nav-item" data-view="settings" data-icon="d97bb7cb32ce65846faf77921bfee12a.png">
- <div class="nav-icon"></div>
- <div class="nav-label">设置</div>
+  <div class="nav-icon"></div>
+  <div class="nav-label">设置</div>
+ </div>
+ <div class="nav-item" data-view="ai" data-icon="ai.png">
+  <div class="nav-icon"></div>
+  <div class="nav-label">AI 助手</div>
  </div>
  <button class="theme-quick-btn" id="themeQuickBtn" title="切换主题" aria-label="切换主题">🎨 切换主题</button>
  </aside>
@@ -86,6 +108,8 @@
  <span class="icon">📶</span>
  <span class="icon">📡</span>
  <span class="icon">🔋</span>
+ <button class="btn btn-sm" id="globalQuickNoteBtn" title="随手速记">✏️ 速记</button>
+ <button class="btn btn-sm" id="globalBackupBtn" title="数据备份与恢复">💾 备份</button>
  <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="打开分栏导航菜单" title="分栏导航">☰</button>
  </div>
  </div>
@@ -97,12 +121,6 @@
  <div class="welcome-text">
  <div class="welcome-greeting" id="welcomeText">午安，<span class="name">Hannah</span>～</div>
  <div class="welcome-msg" id="welcomeMsg">今天也要加油哦 </div>
- <div class="welcome-progress">
- <div class="progress-bar">
- <div class="progress-fill" id="dailyProgressFill" style="width: 0%"></div>
- </div>
- <div class="progress-text" id="dailyProgressText">0%</div>
- </div>
  </div>
  <!-- 桌面宠物（小狗）已抽出为全屏浮层 #desktopPet，本卡只保留三枚状态徽章 -->
  <div class="pet-status-strip" title="点桌面上的小狗摸它一下就能恢复心情啦">
@@ -138,31 +156,22 @@
  </div>
  </div>
 
- <!-- 今日要做 -->
- <div class="card" id="careReminder">
+<!-- 今日时间线（内嵌于桌面视图，复用日程数据 state.schedule.events） -->
+<div class="card dashboard-timeline-card">
  <div class="card-title-row">
- <div class="card-title">📋 今日要做</div>
- <span class="points-badge" id="pointsBadge"> 0 积分</span>
- <button class="btn primary btn-sm" id="addTaskBtn">＋ 添加任务</button>
+ <div class="card-title">🗓 今日时间线</div>
+ <button class="btn primary btn-sm" id="desktopAddEvent" title="添加当日或未来日程">＋ 添加日程</button>
  </div>
- <div class="task-suggest" id="taskSuggest"></div>
- <div class="task-list" id="taskList"></div>
- </div>
+ <div class="dashboard-timeline" id="desktopTimeline"></div>
+</div>
 
- <!-- 最近动态 -->
- <div class="card">
- <div class="card-title">📝 最近动态</div>
- <div id="recentFeed"></div>
- </div>
- </section>
+</section>
 
- <!-- 日程视图 -->
- <section class="view" id="view-schedule">
- <div class="card">
- <div class="card-title">📅 日程</div>
- <div class="calendar" id="calendar"></div>
- </div>
- </section>
+
+<!-- 日程视图（纯前端 localStorage 单文件模块，由 schedule_app.js 渲染进 #schedRoot） -->
+<section class="view" id="view-schedule">
+<div id="schedRoot"></div>
+</section>
 
  <!-- 日记视图 -->
  <section class="view" id="view-diary">
@@ -186,6 +195,7 @@
  <div class="card-title">📖 今日日记 <span id="diaryTodayLabel" class="diary-today-label">—</span></div>
  <div class="mood-picker" id="moodPicker"></div>
  <div class="weather-picker" id="weatherPicker"></div>
+ <div class="diary-tag-editor" id="diaryTagEditor"></div>
  <textarea class="diary-textarea" id="diaryContent" placeholder="写下今天的故事吧～"></textarea>
  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
  <div style="font-family: 'Press Start 2P',monospace; font-size: 9px; color: var(--text-mid);" id="diarySaveStatus">已自动保存</div>
@@ -225,6 +235,9 @@
  <div class="diary-filter-actions">
  <button class="btn" id="diaryClearFilterBtn">✕ 清除筛选</button>
  </div>
+ <!-- 时间筛选 + 标签筛选（新增） -->
+ <div class="diary-time-bar" id="diaryTimeBar"></div>
+ <div class="diary-filter-bar" id="diaryTagFilterBar"></div>
  </div>
 
  <div class="card">
@@ -293,6 +306,7 @@
  <input class="search-input" id="inspirationSearch" placeholder="搜索灵感关键词...">
  <button class="search-btn">搜索</button>
  <button class="inspiration-refresh" id="inspirationRefresh" title="重新推送一批灵感">🔄 换一批</button>
+ <button class="btn btn-sm" id="inspAddBtn" style="margin-left:6px;">＋ 新增灵感</button>
  </div>
  <div class="inspiration-source-tabs" id="sourceTabs"></div>
  <div class="inspiration-list" id="inspirationList"></div>
@@ -350,34 +364,17 @@
  </div>
  </section>
 
- <!-- 人力资源视图 -->
- <section class="view" id="view-hr">
- <div class="learn-content">
- <div class="learn-day-header">
- <div class="learn-day-title">👥 今日 HR · <span id="hrDate"></span> <span id="hrTheme" style="color: var(--kuromi-purple); font-size: 12px;"></span></div>
- <div class="learn-streak" id="hrStreak"> 连续 0 天</div>
- </div>
-
- <div class="learn-block">
- <div class="learn-block-title">
- 📚 今日知识点
- <button class="inspiration-refresh" id="hrRefreshBtn" title="换一批知识点">🔄 换一批</button>
- </div>
- <div id="hrKnowledge"></div>
- </div>
-
- <div class="learn-block">
- <div class="learn-block-title">🎬 推荐学习视频</div>
- <div class="learn-resource-list" id="hrResources"></div>
- </div>
-
- <div style="text-align: right; margin-top: 12px;">
- <button class="btn primary" id="hrCheckinBtn">✓ 完成今日打卡</button>
- </div>
- </div>
+ <!-- 生活视图（外卖推荐 + 喝水记录） -->
+ <section class="view" id="view-life">
+ <!-- 内容由 js/life.js 动态渲染 -->
  </section>
 
- <!-- 人才库视图（人事招聘系统） -->
+ <!-- 资讯视图（每日速览 + 随机破茧房 + 常识补全库） -->
+ <section class="view" id="view-vision">
+ <!-- 内容由 js/vision.js 动态渲染 -->
+ </section>
+
+<!-- 人才库视图（人事招聘系统） -->
  <section class="view" id="view-talent-pool">
  <div class="talent-pool-header">
  <div class="talent-pool-title">
@@ -465,112 +462,45 @@
  </div>
  </section>
 
- <!-- 健身视图 -->
+ <!-- 健身视图（由 js/fitness_app.js 全量渲染，纯前端 localStorage，单文件模块） -->
  <section class="view" id="view-fitness">
- <div class="workout-wizard">
- <div class="card-title">💪 今日运动顾问</div>
-
- <div class="wizard-step">
- <div class="wizard-step-title">1⃣ 今天的运动场景？</div>
- <div class="wizard-options" id="workoutScene">
- <div class="wizard-option" data-scene="home">🏠 居家</div>
- <div class="wizard-option" data-scene="gym">🏋 健身房</div>
- <div class="wizard-option" data-scene="swim">🏊 游泳</div>
- <div class="wizard-option" data-scene="outdoor">🌳 户外</div>
- </div>
- </div>
-
- <div class="wizard-step">
- <div class="wizard-step-title">2⃣ 想锻炼的部位？（可多选）</div>
- <div class="wizard-options" id="workoutPart">
- <div class="wizard-option" data-part="full"> 全身</div>
- <div class="wizard-option" data-part="core">🧘 核心/腰腹</div>
- <div class="wizard-option" data-part="leg">🦵 腿部</div>
- <div class="wizard-option" data-part="arm">💪 手臂</div>
- <div class="wizard-option" data-part="back">🏋 背部</div>
- <div class="wizard-option" data-part="hip"> 臀腿</div>
- <div class="wizard-option" data-part="cardio"> 有氧</div>
- <div class="wizard-option" data-part="stretch"> 拉伸</div>
- </div>
- </div>
-
- <div class="wizard-step">
- <div class="wizard-step-title">3⃣ 时长？</div>
- <div class="wizard-options" id="workoutDuration">
- <div class="wizard-option" data-dur="15">⏱ 15分钟</div>
- <div class="wizard-option" data-dur="30">⏱ 30分钟</div>
- <div class="wizard-option" data-dur="45">⏱ 45分钟</div>
- <div class="wizard-option" data-dur="60">⏱ 60分钟</div>
- </div>
- </div>
-
- <button class="btn primary" id="getRecommendBtn" style="width: 100%; padding: 12px; font-size: 15px;">🎯 为我推荐跟练</button>
-
- <div class="wizard-recommend" id="workoutRecommend" style="display: none;">
- <div class="recommend-title">🎬 你的专属跟练方案</div>
- <div id="workoutRecommendList"></div>
- <button class="start-workout-btn" id="startWorkoutBtn"> 开始运动</button>
- </div>
- </div>
-
- <div class="card">
- <div class="card-title">📊 运动记录</div>
- <div id="fitnessRecords"></div>
- </div>
+ <div id="fitRoot"></div>
  </section>
 
- <!-- 作品集视图 -->
+ <!-- 作品集视图（创作工作台：人物库 / 世界观设定 / 灵感素材库 / 作品） -->
  <section class="view" id="view-portfolio">
- <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
- <div class="card-title" style="margin: 0; border: none; padding: 0;">🎮 作品集</div>
+ <div class="pf-header">
+ <div class="pf-title">🎮 作品集 · 创作工作台</div>
+ <div class="pf-sub">人物 · 世界观 · 灵感，一站式沉淀你的创作宇宙</div>
+ </div>
+
+ <!-- 一级 Tab：4 大模块 -->
+ <div class="pf-tabs" id="pfTabs">
+ <button class="pf-tab active" data-pftab="chars">🧙 人物库</button>
+ <button class="pf-tab" data-pftab="world">🌍 世界观设定</button>
+ <button class="pf-tab" data-pftab="insp">💡 灵感素材库</button>
+ <button class="pf-tab" data-pftab="works">📚 作品</button>
+ </div>
+
+ <!-- 各模块内容容器，由 js 渲染 -->
+ <div class="pf-panel active" id="pfPanelChars"></div>
+ <div class="pf-panel" id="pfPanelWorld"></div>
+ <div class="pf-panel" id="pfPanelInsp"></div>
+
+ <!-- 作品 Tab 复用原有「作品」逻辑（保留历史数据，不丢失） -->
+ <div class="pf-panel" id="pfPanelWorks">
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+ <div class="card-title" style="margin:0; border:none; padding:0;">📚 作品</div>
  <button class="add-portfolio-btn" id="addPortfolioBtn">+ 添加作品</button>
  </div>
  <div class="portfolio-list" id="portfolioList"></div>
+ </div>
  </section>
 
- <!-- 记账视图 -->
+ <!-- 记账视图（内容由 js/finance_app.js 动态渲染，结构顺序：
+      收支卡片 → 柱状趋势图 → 环形饼图 → 筛选栏+账目明细 → 预算/模板/月度复盘） -->
  <section class="view" id="view-finance">
- <div class="finance-summary">
- <div class="finance-card income">
- <span class="finance-icon"></span>
- <div class="finance-value" id="totalIncome">¥0</div>
- <div class="finance-label">本月收入</div>
- </div>
- <div class="finance-card expense">
- <span class="finance-icon"></span>
- <div class="finance-value" id="totalExpense">¥0</div>
- <div class="finance-label">本月支出</div>
- </div>
- <div class="finance-card balance">
- <span class="finance-icon"></span>
- <div class="finance-value" id="totalBalance">¥0</div>
- <div class="finance-label">结余</div>
- </div>
- </div>
-
- <div class="sanrio-chart">
- <div class="sanrio-chart-title">📊 本周支出（按日）</div>
- <div class="sanrio-bars" id="weekChart"></div>
- </div>
-
- <div class="sanrio-chart">
- <div class="sanrio-chart-title"> 支出分类</div>
- <div class="sanrio-pie">
- <div class="sanrio-pie-canvas" id="pieChart"></div>
- <div class="pie-legend" id="pieLegend"></div>
- </div>
- </div>
-
- <div class="finance-records">
- <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
- <div class="card-title" style="margin: 0; border: none; padding: 0;"> 账目明细</div>
- <div>
- <button class="btn" id="addIncomeBtn" style="margin-right: 6px;">+ 收入</button>
- <button class="btn primary" id="addExpenseBtn">+ 支出</button>
- </div>
- </div>
- <div id="financeRecords"></div>
- </div>
+ <div id="finRoot"></div>
  </section>
 
  <!-- 番茄钟 / 专注视图 -->
@@ -654,7 +584,7 @@
  <img class="profile-avatar" id="profileAvatar" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAADvSURBVGje7ZjbDcMgDEXDEN0nQ4Rkhy7RKToE2adLdIeKAuZlCBmA66OqkuPjHwSy5WURBGEeHjqyukClYAO2XXo/PcYbrvIZojcVQ9o+bcKR7d6I//Rxg7RVSZMRK1PZCmmXdGOHUOz6NMUWe2hzxG48+gHapUUNbNaoEGzVPq2mgDcqFPvmmXWPDcnew7wbeFlrf8kLgy+orVPBYYlPUjWyTT0723wOBrXzxTrs15QrhWzXNflMcwrNbrvUVYhlu2mmG/3zfYo2m30wbM3T/PjOi3lwfpv2krSGazFpd4lm1+vajsFeE8AWBEGYhT++tQ4KjDXcjwAAAABJRU5ErkJggg==" alt="头像">
  <div class="profile-info">
  <div class="profile-name" id="profileName">Hannah</div>
- <div class="profile-bio">写作 · 阅读 · 健身 · 学习</div>
+ <div class="profile-bio">写作 · 阅读 · 健身 · 学习 · 日程 · 生活</div>
  </div>
  </div>
  <div class="settings-row">
@@ -681,10 +611,55 @@
  </div>
 
  <div class="settings-section">
+ <div class="card-title">🖼 主题背景</div>
+ <div class="bg-upload-area">
+ <div class="bg-upload-box" id="bgUploadBox">
+ <span style="font-size:32px;">🖼️</span>
+ <span style="font-family:'Pixelify Sans',sans-serif; font-size:12px; color:var(--text-mid);">点击导入本地图片</span>
+ <input type="file" id="bgUpload" accept="image/*" style="display:none">
+ </div>
+ <div class="bg-preview" id="bgPreview" style="display:none;">
+ <img id="bgPreviewImg" alt="背景预览">
+ </div>
+ </div>
+
+ <div class="bg-field">
+ <div class="bg-field-head"><span>填充方式</span></div>
+ <div class="bg-radio-row">
+ <label class="bg-radio"><input type="radio" name="bgSize" value="cover"> 填充 (cover)</label>
+ <label class="bg-radio"><input type="radio" name="bgSize" value="contain"> 适应 (contain)</label>
+ </div>
+ </div>
+
+ <div class="bg-field">
+ <div class="bg-field-head"><span>模糊度</span><span class="bg-val" id="bgBlurVal">0px</span></div>
+ <input type="range" id="bgBlur" min="0" max="30" step="1" value="0" class="bg-slider">
+ </div>
+ <div class="bg-field">
+ <div class="bg-field-head"><span>亮度</span><span class="bg-val" id="bgBrightVal">100%</span></div>
+ <input type="range" id="bgBrightness" min="50" max="150" step="1" value="100" class="bg-slider">
+ </div>
+ <div class="bg-field">
+ <div class="bg-field-head"><span>透明度</span><span class="bg-val" id="bgOpacityVal">100%</span></div>
+ <input type="range" id="bgOpacity" min="0" max="100" step="1" value="100" class="bg-slider">
+ </div>
+ <div class="bg-field">
+ <div class="bg-field-head"><span>遮罩强度（提升文字可读性）</span><span class="bg-val" id="bgScrimVal">0%</span></div>
+ <input type="range" id="bgScrim" min="0" max="80" step="1" value="0" class="bg-slider">
+ </div>
+
+ <div class="bg-actions">
+ <button class="settings-btn" id="bgApplyBtn">✨ 保存背景</button>
+ <button class="settings-btn" id="bgResetBtn">↺ 恢复默认</button>
+ </div>
+ <div class="bg-tip">提示：导入的图片仅保存在你本机浏览器中，不会上传到任何服务器。拖动滑块可实时预览，点击「保存背景」后刷新页面仍生效。模糊度可柔化背景，遮罩强度可压暗背景让文字更清晰。</div>
+ </div>
+
+ <div class="settings-section">
  <div class="card-title">🔗 桌面助手</div>
  <div class="settings-row">
  <span class="settings-label">当前助手</span>
- <span class="settings-label" id="currentMascotName" style="color: var(--pink-500);"> Hello Kitty</span>
+ <span class="settings-label" id="currentMascotName" style="color: var(--pink-500);"> 旺仔</span>
  </div>
  <div class="settings-row">
  <span class="settings-label">能量值</span>
@@ -721,13 +696,97 @@
  <div class="card-title">ℹ 关于</div>
  <div style="font-family: 'Pixelify Sans',sans-serif; font-size: 13px; color: var(--text-mid); line-height: 1.8;">
  <strong>像素工作台 v3.0</strong><br>
- 为 Hannah 量身打造<br>
- 三丽鸥角色陪你一起成长<br>
- 每天打卡获取能量，与桌面助手互动
+ 为 Hannah 量身打造，旺仔陪你一起成长<br>
+ 日程 · 生活 · 理财 · 健身 · 阅读 · 人才库 · 视野 · AI 助手<br>
+ 任何行为都能为旺仔补充能量，与它一起变强
  </div>
  </div>
  </section>
- </main>
+
+ <section class="view" id="view-ai">
+ <div class="ai-wrap">
+ <div class="card-title">🤖 AI 助手设置</div>
+
+ <div class="ai-security-note">
+ ⚠️ <b>安全提示</b>：你的 API Key 只保存在<strong>你本机浏览器的 localStorage</strong>，只会发往<strong>你填写的官方接口地址</strong>，不会上传到任何第三方。请<strong>不要</strong>把 Key 发到聊天、群聊或截图里；本页也不会完整显示你的 Key。
+ </div>
+
+ <div class="settings-row">
+ <span class="settings-label">平台名称</span>
+ <input class="settings-input" id="aiPlatform" placeholder="例如：DeepSeek / Kimi / 通义千问 / 自定义">
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">模型名称</span>
+ <input class="settings-input" id="aiModel" placeholder="例如：deepseek-v4-flash / kimi-k3 / qwen-plus">
+ </div>
+ <div class="settings-row">
+ <span class="settings-label">API 地址</span>
+ <input class="settings-input" id="aiUrl" placeholder="https://.../chat/completions（完整对话接口地址）">
+ </div>
+ <div class="settings-row ai-key-row">
+ <span class="settings-label">API Key</span>
+ <div class="ai-key-input-wrap">
+ <input class="settings-input" id="aiKey" type="password" placeholder="sk-...（默认隐藏，点 👁 查看）" autocomplete="off" spellcheck="false">
+ <button class="ai-eye" id="aiKeyToggle" type="button" aria-label="显示或隐藏 Key" title="显示 / 隐藏">👁</button>
+ </div>
+ </div>
+
+ <div class="ai-actions">
+ <button class="settings-btn" id="aiSaveBtn">💾 保存配置</button>
+ <button class="settings-btn" id="aiTestBtn">🔌 测试连接</button>
+ <button class="settings-btn danger" id="aiClearBtn">🗑 清除配置</button>
+ </div>
+
+ <div class="ai-status" id="aiStatus"></div>
+
+ <details class="ai-help">
+ <summary>📖 填写说明：去哪创建 Key · 每一项填什么 · 怎么测试 · 怎么更换 / 删除</summary>
+ <div class="ai-help-body">
+ <p><b>一、去哪里创建 API Key（以常见平台为例）</b></p>
+ <ul>
+ <li><b>DeepSeek</b>：登录 <a href="https://platform.deepseek.com" target="_blank" rel="noopener noreferrer">platform.deepseek.com</a> → API Keys → 新建，复制保存（只显示一次）。</li>
+ <li><b>Kimi（Moonshot）</b>：登录 <a href="https://platform.moonshot.cn" target="_blank" rel="noopener noreferrer">platform.moonshot.cn</a> → API Key 管理 → 新建。</li>
+ <li><b>通义千问（DashScope / 百炼）</b>：登录 <a href="https://help.aliyun.com/zh/model-studio/get-api-key" target="_blank" rel="noopener noreferrer">阿里云百炼</a> → 创建 API Key。</li>
+ <li>其他 OpenAI 兼容平台同理，在其控制台创建 Key。</li>
+ </ul>
+ <p><b>二、每一项填什么</b></p>
+ <ul>
+ <li><b>平台名称</b>：随便填，仅作备注（如「我的 DeepSeek」）。</li>
+ <li><b>模型名称</b>：填该平台的具体模型 ID，例如 <code>deepseek-v4-flash</code>、<code>kimi-k3</code>、<code>qwen-plus</code>。</li>
+ <li><b>API 地址</b>：填<strong>完整的对话接口地址</strong>，必须以 <code>https://</code> 开头、以 <code>/chat/completions</code> 结尾：
+ <ul>
+ <li>DeepSeek：<code>https://api.deepseek.com/chat/completions</code></li>
+ <li>Kimi：<code>https://api.moonshot.cn/v1/chat/completions</code></li>
+ <li>通义千问：<code>https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions</code></li>
+ </ul>
+ </li>
+ <li><b>API Key</b>：粘贴你创建的 Key。默认隐藏；留空表示「沿用已保存的 Key，不改动」。</li>
+ </ul>
+ <p><b>三、怎样测试连接</b></p>
+ <ul>
+ <li>填好后点「💾 保存配置」，再点「🔌 测试连接」。会向你的地址发一条极小的测试请求。</li>
+ <li>成功会提示「✅ 连接成功」；失败会给出<strong>不含 Key 的</strong>原因（如地址错误、Key 无效、余额不足、或被跨域拦截）。</li>
+ </ul>
+ <p><b>四、怎样更换或删除 Key</b></p>
+ <ul>
+ <li><b>更换</b>：重新粘贴新 Key 到输入框，点「保存配置」即可覆盖。旧 Key 立即失效（请先到平台控制台吊销旧 Key）。</li>
+ <li><b>删除</b>：点「🗑 清除配置」，会清空本机保存的平台 / 模型 / 地址 / Key（仅本地，不影响平台账户）。</li>
+ </ul>
+ <p class="ai-help-warn">🔒 若某平台<strong>不允许网页直接调用</strong>（浏览器报跨域 / CORS 错误），说明它不适合纯前端直连。此时请勿把 Key 交给任何「中转」网页，更安全的做法是使用一个<strong>你自己的后端代理</strong>（几行 Node/Python 即可，Key 只留在服务端）。本工具会如实报错，不会假装连接成功。</p>
+ </div>
+ </details>
+
+ <div class="card-title" style="margin-top:20px;">💬 和 AI 对话</div>
+ <div class="ai-chat" id="aiChat">
+ <div class="ai-chat-empty" id="aiChatEmpty">配置并保存 API 后，就可以在这里和 AI 聊天啦～</div>
+ </div>
+ <div class="ai-chat-input-row">
+ <textarea id="aiInput" class="ai-input" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）" rows="2"></textarea>
+ <button class="settings-btn" id="aiSendBtn">发送</button>
+ </div>
+ </div>
+ </section>
+</main>
  </div>
 
  <!-- 分栏抽屉导航（移动端：右上角 ☰ 触发，展示头像/昵称/分栏图标列表） -->
@@ -747,14 +806,15 @@
  <div class="drawer-nav-item" data-view="diary" data-icon="2ac8f9325a5af6ed3f77501d6d1d6fb6.png"><div class="nav-icon"></div><div class="nav-label">日记</div></div>
  <div class="drawer-nav-item" data-view="reading" data-icon="7c80a70aeed609066e30be12e1ae51fa.png"><div class="nav-icon"></div><div class="nav-label">阅读</div></div>
  <div class="drawer-nav-item" data-view="inspiration" data-icon="7f8afddb5e863c9c7ef95e4c49356f66.png"><div class="nav-icon"></div><div class="nav-label">灵感</div></div>
- <div class="drawer-nav-item" data-view="english" data-icon="50b0c14c03be1d6bab6eabdadc12058a.png"><div class="nav-icon"></div><div class="nav-label">英语</div></div>
- <div class="drawer-nav-item" data-view="hr" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png"><div class="nav-icon"></div><div class="nav-label">HR</div></div>
+ <div class="drawer-nav-item" data-view="vision" data-icon="vision.png"><div class="nav-icon"></div><div class="nav-label">资讯</div></div>
+<div class="drawer-nav-item" data-view="life" data-icon="93bd58cc3a452b8b8c4bbe45bb556958.png"><div class="nav-icon"></div><div class="nav-label">生活</div></div>
  <div class="drawer-nav-item" data-view="talent-pool" data-icon="e22f0c10d68698c28c4b6ac95ab13915.png"><div class="nav-icon"></div><div class="nav-label">人才库</div></div>
  <div class="drawer-nav-item" data-view="fitness" data-icon="0932cdaca17d51e79a69ebb930649529.png"><div class="nav-icon"></div><div class="nav-label">健身</div></div>
  <div class="drawer-nav-item" data-view="portfolio" data-icon="7132168e66e8204922d710b561269aa2.png"><div class="nav-icon"></div><div class="nav-label">作品集</div></div>
  <div class="drawer-nav-item" data-view="finance" data-icon="c2b9750f9f7ec39abc8664e2c13d3784.png"><div class="nav-icon"></div><div class="nav-label">记账</div></div>
  <div class="drawer-nav-item" data-view="focus" data-icon="1d657cd930ec753bce5d01932269936a.png"><div class="nav-icon"></div><div class="nav-label">专注</div></div>
  <div class="drawer-nav-item" data-view="settings" data-icon="d97bb7cb32ce65846faf77921bfee12a.png"><div class="nav-icon"></div><div class="nav-label">设置</div></div>
+<div class="drawer-nav-item" data-view="ai" data-icon="ai.png"><div class="nav-icon"></div><div class="nav-label">AI 助手</div></div>
  </nav>
  </aside>
 
@@ -789,8 +849,42 @@
  <div class="theme-cards" id="themeCardsPopover"></div>
  </div>
 
- <script src="js/data.js"></script>
- <script src="js/api.js"></script>
- <script src="js/app.js"></script>
+ <script src="js/data.js?v=20260804"></script>
+ <script src="js/api.js?v=20260804"></script>
+ <!-- 今日书单推荐：书籍预置数据 + 推荐逻辑（纯前端） -->
+ <script src="js/books.js?v=20260804"></script>
+ <script src="js/bookRecommend.js?v=20260804"></script>
+ <script src="js/inspirations.js?v=20260804"></script>
+ <script src="js/inspiration.js?v=20260804"></script>
+ <!-- 生活页面：外卖推荐 + 喝水记录 + 食谱 + 生理期（纯前端） -->
+ <script src="js/takeout.js?v=20260804"></script>
+ <script src="js/water.js?v=20260804"></script>
+ <script src="js/recipe.js?v=20260804"></script>
+ <script src="js/period.js?v=20260804"></script>
+ <script src="js/life.js?v=20260804"></script>
+ <!-- 资讯页面：每日速览 + 随机破茧房 + 常识补全库（纯前端） -->
+ <script src="js/vision_data.js?v=20260804"></script>
+ <script src="js/vision.js?v=20260804"></script>
+ <!-- AI 助手：设置 + 对话（纯前端 OpenAI 兼容，API Key 仅存本地、仅发往用户填写的官方地址） -->
+ <script src="js/ai_helper.js?v=20260804"></script>
+ <script src="js/app.js?v=20260804"></script>
+ <!-- 全局增强模块（纯前端，独立文件，不改动原有业务读写逻辑） -->
+ <script src="js/backup.js?v=20260804"></script>
+ <script src="js/quicknote.js?v=20260804"></script>
+ <script src="js/inspiration_add.js?v=20260804"></script>
+ <script src="js/takeout_enhance.js?v=20260804"></script>
+ <!-- 作品集模块（人物库 / 世界观设定 / 灵感素材库 / 作品） -->
+ <script src="js/portfolio.js?v=20260804"></script>
+ <script src="js/portfolio_chars.js?v=20260804"></script>
+ <script src="js/portfolio_world.js?v=20260804"></script>
+ <script src="js/portfolio_insp.js?v=20260804"></script>
+ <!-- 健身模块（纯前端 localStorage 单文件，详见 js/fitness_app.js 顶部注释） -->
+ <script src="js/fitness_app.js?v=20260804"></script>
+ <!-- 记账模块（纯前端 localStorage 单文件，详见 js/finance_app.js 顶部注释）
+      必须放在 fitness_app.js 之后：需要包装 window.renderFitnessModule 注入「健身花销」卡片 -->
+ <script src="js/finance_app.js?v=20260804"></script>
+<!-- 日程模块（纯前端 localStorage 单文件，详见 js/schedule_app.js 顶部注释）
+     必须放在 finance_app.js 之后：与其他模块桥接一致，且依赖 app.js 暴露的 window.toast/showModal/saveData 等全局助手 -->
+<script src="js/schedule_app.js?v=20260804"></script>
 </body>
 </html>

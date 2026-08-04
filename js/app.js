@@ -28,7 +28,6 @@
  reading: {},
  writing: {},
  english: {},
- hr: {},
  fitness: {},
  },
 
@@ -83,11 +82,6 @@
  testHistory: [], // [{ month: '2026-07', score: 85, total: 20, date: '2026-07-31' }]
  },
 
- hr: {
- streak: 0,
- lastDate: null,
- },
-
  fitness: {
  records: [], // { date, scene, part, duration, video }
  },
@@ -127,7 +121,6 @@
 
  social: [],
 
- tasks: [], // 自定义任务 { id, title, desc, deadline, priority:'high|medium|low', done, createdAt }
 
  // 番茄钟 / 专注模块
  focus: {
@@ -300,21 +293,54 @@
  closeNavDrawer();
  window.scrollTo({ top: 0, behavior: 'smooth' });
 
+ // 作品集桥接：把导航事件转交给作品集模块（portfolio.js 暴露 window.renderPortfolioModule），
+ // 同时把原 renderPortfolio 暴露给 window.__origRenderPortfolio，供「作品」Tab 复用（历史数据不丢失）。
+ function renderPortfolioBridge() {
+ if (!window.__origRenderPortfolio) window.__origRenderPortfolio = renderPortfolio;
+ if (typeof window.renderPortfolioModule === 'function') window.renderPortfolioModule();
+ else renderPortfolio();
+ }
+
+ // 记账桥接：把导航渲染转交给记账模块（finance_app.js 暴露 window.renderFinanceModule），
+ // 同时把原 renderFinance 暴露给 window.__origRenderFinance，供兜底复用（历史数据不丢失）。
+ function renderFinanceBridge() {
+ if (!window.__origRenderFinance) window.__origRenderFinance = renderFinance;
+ if (typeof window.renderFinanceModule === 'function') window.renderFinanceModule();
+ else renderFinance();
+ }
+
+// 健身桥接：把导航渲染转交给健身模块（fitness_app.js 暴露 window.renderFitnessModule），
+// 同时把原 renderFitness 暴露给 window.__origRenderFitness，供兜底复用（历史数据不丢失）。
+function renderFitnessBridge() {
+  if (!window.__origRenderFitness) window.__origRenderFitness = renderFitness;
+  if (typeof window.renderFitnessModule === 'function') window.renderFitnessModule();
+  else renderFitness();
+}
+
+// 日程桥接：把导航渲染转交给日程模块（schedule_app.js 暴露 window.renderScheduleModule），
+// 同时把原 renderSchedule 暴露给 window.__origRenderSchedule，供兜底复用（历史数据不丢失）。
+function renderScheduleBridge() {
+  if (!window.__origRenderSchedule) window.__origRenderSchedule = renderSchedule;
+  if (typeof window.renderScheduleModule === 'function') window.renderScheduleModule();
+  else renderSchedule();
+}
+
  // 触发各视图渲染
  const renderers = {
  dashboard: renderDashboard,
- schedule: renderSchedule,
+ schedule: renderScheduleBridge,
  diary: renderDiary,
  reading: renderReading,
  inspiration: renderInspiration,
- english: renderEnglish,
- hr: renderHR,
- fitness: renderFitness,
- portfolio: renderPortfolio,
- finance: renderFinance,
- settings: renderSettings,
- focus: renderFocus,
- 'talent-pool': renderTalentPool,
+  english: renderEnglish,
+  vision: renderVision,
+ fitness: renderFitnessBridge,
+ portfolio: renderPortfolioBridge,
+ finance: renderFinanceBridge,
+  settings: renderSettings,
+  focus: renderFocus,
+  'talent-pool': renderTalentPool,
+  ai: function () { if (window.renderAIModule) window.renderAIModule(); },
  };
  if (renderers[viewName]) renderers[viewName]();
  }
@@ -349,16 +375,8 @@
  // 这里仅更新数值徽章，不再操作 sprite。
  updateMascotStats();
 
- // 今日进度：以「今日要做」任务完成率衡量
- // （桌面六格打卡栏目已移除，打卡获取能量的核心功能已整合至「今日要做」任务模块）
- const today = getDateStr(now);
- const tasks = state.tasks || [];
- const doneTasks = tasks.filter(t => t.done).length;
- const progress = tasks.length ? Math.round((doneTasks / tasks.length) * 100) : 0;
- $('#dailyProgressFill').style.width = progress + '%';
- $('#dailyProgressText').textContent = progress + '%';
-
  // 4个统计
+ const today = getDateStr(now);
  const todayEvents = (state.schedule.events[today] || []).length;
  $('#statTodayEvents').textContent = todayEvents;
 
@@ -384,46 +402,71 @@
  if (statCards[2]) statCards[2].querySelector('.stat-icon').textContent = ['💪','','',''][new Date().getDate() % 4];
  if (statCards[3]) statCards[3].querySelector('.stat-icon').textContent = ['✍','','',''][new Date().getDate() % 4];
 
- // 今日要做 - 智能建议 + 自定义任务管理
- renderTodayTasks();
+ // 首页四宫格数据卡片（待办 / 饮水 / 支出 / 经期）
+ renderDesktopTimeline();
+}
 
- // 最近动态
- const feed = [];
- state.reading.logs.slice(-5).forEach(l => {
- feed.push({ icon: '📚', title: `阅读了《${l.bookName || '某书'}》${l.pages}页`, meta: '阅读', time: l.date });
- });
- state.writing.logs.slice(-5).forEach(l => {
- feed.push({ icon: '✍', title: `写了${l.words}字`, meta: '写作', time: l.date });
- });
- state.finance.records.slice(-5).forEach(r => {
- feed.push({
- icon: r.type === 'income' ? '' : '',
- title: `${r.type === 'income' ? '收入' : '支出'} ${r.name} ¥${r.amount}`,
- meta: r.category,
- time: r.date,
- });
- });
- state.fitness.records.slice(-5).forEach(r => {
- feed.push({ icon: '💪', title: `${r.scene}-${r.part} ${r.duration}分钟`, meta: '运动', time: r.date });
- });
-
- feed.sort((a, b) => b.time.localeCompare(a.time));
-
- if (feed.length === 0) {
- $('#recentFeed').innerHTML = '<div class="empty-state"><span class="empty-state-icon">📝</span>还没有动态，开始记录吧～</div>';
- } else {
- $('#recentFeed').innerHTML = feed.slice(0, 6).map(f => `
- <div class="feed-item">
- <div class="feed-icon">${f.icon}</div>
- <div class="feed-body">
- <div class="feed-title">${f.title}</div>
- <div class="feed-meta">${f.meta}</div>
- </div>
- <div class="feed-time">${f.time.slice(5)}</div>
- </div>
- `).join('');
+ // ============================================
+ // 🖥 桌面「今日时间线」——内嵌于工作台桌面视图
+ // ============================================
+ function dtEsc(s) {
+   var d = document.createElement('div');
+   d.textContent = s == null ? '' : String(s);
+   return d.innerHTML;
  }
+ function catColorFor(name) {
+   var m = { '工作': '#FFB3C6', '学习': '#A0D8F0', '运动': '#A8E6CF', '饮食': '#FFD8A8', '面试': '#D6B3F0', '阅读': '#C9B6F0', '其他': '#D9D9E3' };
+   return m[name] || '#D9D9E3';
  }
+ function renderDesktopTimeline() {
+   var box = document.getElementById('desktopTimeline');
+   if (!box) return;
+   var today = getDateStr(new Date());
+   var events = (window.state && window.state.schedule && window.state.schedule.events[today]) || [];
+   events = events.slice().sort(function (a, b) { return (a.startTime || '').localeCompare(b.startTime || ''); });
+   if (events.length === 0) {
+     box.innerHTML = '<div class="dt-empty">🌿 今天还没有安排，点「＋ 添加日程」规划一下吧～</div>';
+     return;
+   }
+   var now = new Date();
+   var curMin = now.getHours() * 60 + now.getMinutes();
+   var activeIdx = -1;
+   for (var i = 0; i < events.length; i++) {
+     var t = events[i].startTime || '00:00';
+     var p = t.split(':');
+     var m = (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+     if (m <= curMin) activeIdx = i; else break;
+   }
+   box.innerHTML = events.map(function (e, idx) {
+     var color = catColorFor(e.category);
+     var done = e.done ? ' done' : '';
+     var cur = idx === activeIdx ? ' current' : '';
+     return '<div class="dt-item' + done + cur + '" data-evid="' + dtEsc(e.id || '') + '">' +
+       '<div class="dt-track"><div class="dt-dot"></div></div>' +
+       '<div class="dt-time">' + dtEsc(e.startTime || '') + '</div>' +
+       '<button class="dt-check" data-act="toggle" title="标记完成 / 取消完成" aria-label="标记完成">' + (e.done ? '☑' : '☐') + '</button>' +
+       '<div class="dt-main">' +
+         '<div class="dt-title">' + dtEsc(e.title || '（未命名）') + '</div>' +
+       '</div>' +
+       '<span class="dt-cat" style="--c:' + color + '">' + dtEsc(e.category || '其他') + '</span>' +
+     '</div>';
+   }).join('');
+   Array.prototype.forEach.call(box.querySelectorAll('.dt-item'), function (el) {
+     el.addEventListener('click', function (evt) {
+       // 点勾选框：直接切换完成，不打开编辑弹窗
+       if (evt.target.closest('.dt-check')) {
+         var tid = el.dataset.evid;
+         if (window.ScheduleAPI && window.ScheduleAPI.toggleDone) window.ScheduleAPI.toggleDone(tid);
+         return;
+       }
+       // 点其他区域：打开编辑弹窗
+       var id = el.dataset.evid;
+       var ev = (window.state.schedule.events[today] || []).find(function (x) { return x.id === id; });
+       if (ev && window.ScheduleAPI) window.ScheduleAPI.addEvent(today, ev);
+     });
+   });
+ }
+
 
  // ============================================
  // 🐶 桌面宠物系统 —— 边牧，自由走动、随机活动、可对话
@@ -493,51 +536,87 @@
  // 不同交互行为 → 不同数值变化：能量(energy)/健康(health)/心情(mood)/积分(points)
  // 助手互动消耗能量、提升健康或心情；学习活动正向加成；任务打卡按优先级分配积分。
  // ============================================
- var INTERACTION_RULES = {
- // 桌面助手互动（消耗能量，提升健康/心情）
- pet: { energy: -5, health: 0, mood: +3, label: '抚摸助手' },
- feed: { energy: -10, health: +4, mood: +2, label: '喂食助手' },
- play: { energy: -15, health: +2, mood: +3, label: '陪玩助手' },
- talk: { energy: -20, health: 0, mood: +5, label: '与助手对话' },
+var INTERACTION_RULES = {
+// 桌面助手互动（消耗能量，提升健康/心情）
+pet: { energy: -5, health: 0, mood: +3, label: '抚摸助手' },
+feed: { energy: -10, health: +4, mood: +2, label: '喂食助手' },
+play: { energy: -15, health: +2, mood: +3, label: '陪玩助手' },
+talk: { energy: -20, health: 0, mood: +5, label: '与助手对话' },
 
- // 今日要做·任务打卡（按优先级分配积分，引导聚焦重点事项）
- task_high: { energy: +15, points: +30, mood: +3, health: 0, label: '完成高优先级任务' },
- task_medium: { energy: +10, points: +20, mood: +2, health: 0, label: '完成中优先级任务' },
- task_low: { energy: +6, points: +10, mood: +1, health: 0, label: '完成低优先级任务' },
 
- // 学习活动（完成即加成，对应不同数值侧重）
- read: { energy: +4, health: 0, mood: +2, label: '阅读' },
- write: { energy: +4, health: 0, mood: +3, label: '写作' },
- english: { energy: +4, health: 0, mood: +1, label: '学英语' },
- hr: { energy: +4, health: 0, mood: +1, label: '学HR' },
- fitness: { energy: +6, health: +4, mood: +1, label: '健身运动' },
- diary: { energy: +4, health: 0, mood: +3, label: '写日记' },
- };
+// 学习活动（完成即加成，对应不同数值侧重）
+read: { energy: +4, health: 0, mood: +2, label: '阅读' },
+write: { energy: +4, health: 0, mood: +3, label: '写作' },
+english: { energy: +4, health: 0, mood: +1, label: '学英语' },
+fitness: { energy: +6, health: +4, mood: +1, label: '健身运动' },
+diary: { energy: +4, health: 0, mood: +3, label: '写日记' },
 
- // 统一结算一次交互行为的数值变化（带夹紧与文案）
- function applyInteraction(type, reverse) {
- var rule = INTERACTION_RULES[type];
- if (!rule) return null;
- var sign = reverse ? -1 : 1;
- var dE = (rule.energy || 0) * sign;
- var dH = (rule.health || 0) * sign;
- var dM = (rule.mood || 0) * sign;
- var dP = (rule.points || 0) * sign;
+// —— 通用行为能量：按事件难易程度分配（轻量/高频=1~2，中=2~3，重/费时=4~6）——
+// 任何正向行为都给能量；误触取消时 reverse:true 退回相应能量（见下方 awardEnergy）。
+finance:         { energy: +3, health: 0, mood: +1, label: '记账' },
+schedule_add:    { energy: +2, health: 0, mood: 0,  label: '安排日程' },
+schedule_done:   { energy: +3, health: 0, mood: +1, label: '完成日程' },
+water:           { energy: +1, health: 0, mood: 0,  label: '喝水' },
+period:          { energy: +2, health: 0, mood: 0,  label: '记录经期' },
+recipe_cook:     { energy: +3, health: 0, mood: 0,  label: '做菜打卡' },
+takeout_eat:     { energy: +2, health: 0, mood: 0,  label: '记录用餐' },
+vision_read:     { energy: +1, health: 0, mood: 0,  label: '读完资讯' },
+vision_fav:      { energy: +1, health: 0, mood: 0,  label: '收藏资讯' },
+ai_chat:         { energy: +1, health: 0, mood: +1, label: '与AI对话' },
+book_add:        { energy: +2, health: 0, mood: 0,  label: '加入书架' },
+book_review:     { energy: +3, health: 0, mood: +1, label: '写书评' },
+talent_import:   { energy: +6, health: 0, mood: +2, label: '导入简历' },
+talent_add:      { energy: +4, health: 0, mood: +1, label: '新增人才' },
+portfolio_add:   { energy: +3, health: 0, mood: +1, label: '创作记录' },
+inspiration_add: { energy: +3, health: 0, mood: +1, label: '记录灵感' },
+english_word:    { energy: +1, health: 0, mood: 0,  label: '背单词' },
+fitness_plan:    { energy: +3, health: 0, mood: 0,  label: '制定训练计划' },
+fitness_body:    { energy: +2, health: 0, mood: 0,  label: '录入身体数据' },
+fitness_video:   { energy: +1, health: 0, mood: 0,  label: '收藏健身视频' },
+fitness_exercise:{ energy: +1, health: 0, mood: 0,  label: '新增自定义动作' },
+};
 
- var m = state.mascot;
- m.energy = Math.max(0, (m.energy || 0) + dE);
- m.health = clamp((m.health == null ? 70 : m.health) + dH, 0, 100);
- m.mood = clamp((m.mood == null ? 70 : m.mood) + dM, 0, 100);
- state.points = (state.points || 0) + dP;
- saveData();
+// 统一能量结算（支持批量 count 与撤销 reverse）
+// opts: { reverse:Boolean, count:Number, silent:Boolean }
+//  - 正向行为给能量；消耗类规则 energy 为负（桌面互动）
+//  - 误触取消 → reverse:true 退回相应能量
+function awardEnergy(type, opts) {
+opts = opts || {};
+var rule = INTERACTION_RULES[type];
+if (!rule) return null;
+var sign = opts.reverse ? -1 : 1;
+var mult = (typeof opts.count === 'number' && opts.count > 0) ? opts.count : 1;
+var dE = (rule.energy || 0) * sign * mult;
+var dH = (rule.health || 0) * sign * mult;
+var dM = (rule.mood   || 0) * sign * mult;
+var dP = (rule.points || 0) * sign * mult;
 
- var parts = [];
- if (dE) parts.push((dE > 0 ? '+' : '') + dE + '能量');
- if (dH) parts.push((dH > 0 ? '+' : '') + dH + '健康');
- if (dM) parts.push((dM > 0 ? '+' : '') + dM + '心情');
- if (dP) parts.push((dP > 0 ? '+' : '') + dP + '积分');
- return { rule: rule, summary: parts.join(' · ') };
- }
+var m = state.mascot;
+m.energy = Math.max(0, (m.energy || 0) + dE);
+m.health = clamp((m.health == null ? 70 : m.health) + dH, 0, 100);
+m.mood   = clamp((m.mood   == null ? 70 : m.mood)   + dM, 0, 100);
+state.points = (state.points || 0) + dP;
+saveData();
+updateMascotStats();
+
+// 反馈文案（silent 不弹；notify:false 也不弹，供旧调用保留自身文案）
+var notify = opts.notify !== false;
+if (!opts.silent && notify && dE !== 0) {
+  if (dE > 0) {
+    if (sign < 0) toast('↩ 退回 ' + dE + ' 能量');   // 撤销了"消耗类"行为，能量返还
+    else toast('⚡ +' + dE + ' 能量');                 // 正向获得
+  } else {
+    if (sign < 0) toast('↩ 退回 ' + (-dE) + ' 能量');  // 撤销了"获得类"行为，收回能量
+    else toast('🐾 消耗 ' + (-dE) + ' 能量（' + (rule.label || '') + '）'); // 桌面互动消耗
+  }
+}
+return { rule: rule, summary: (dE > 0 ? '+' : '') + dE + '能量' };
+}
+
+// 兼容旧调用：applyInteraction(type, reverse) —— 不自动弹 toast，沿用调用方自己的文案
+function applyInteraction(type, reverse) {
+return awardEnergy(type, { reverse: !!reverse, notify: false });
+}
 
  // 同步桌面助手的 能量/健康/心情 三枚徽章显示
  function updateMascotStats() {
@@ -551,14 +630,6 @@
  // 已迁移到自由走动小狗系统 (startDesktopPet)，旧的下拉菜单废弃。
  function renderMascotMenu() { /* no-op */ }
 
- // ============================================
- // 📋 今日要做 — 智能建议 + 自定义任务管理
- // ============================================
- const TASK_PRIORITY = {
- high: { label: '高', cls: 'prio-high' },
- medium: { label: '中', cls: 'prio-medium' },
- low: { label: '低', cls: 'prio-low' },
- };
 
  function renderSidebarProfile() {
  const avatars = DATA.PIXEL_AVATARS || [];
@@ -578,168 +649,6 @@
  if (drawerName) drawerName.textContent = name;
  }
 
- function renderTodayTasks() {
- const today = getDateStr(new Date());
-
- // —— 智能建议（根据工作台进度自动生成，只读）——
- const s = [];
- if (!state.checkin.diary[today]) s.push({ icon: '📖', text: '写一篇今日日记' });
- else s.push({ icon: '📖', text: '今日日记已完成', done: true });
- if (!state.checkin.english[today]) s.push({ icon: '🎓', text: '完成英语单词学习' });
- else s.push({ icon: '🎓', text: '英语学习已打卡', done: true });
- if (!state.checkin.hr[today]) s.push({ icon: '👥', text: '学习人力资源知识' });
- else s.push({ icon: '👥', text: 'HR学习已打卡', done: true });
- if (!state.checkin.fitness[today]) s.push({ icon: '💪', text: '完成运动锻炼' });
- else s.push({ icon: '💪', text: '今日运动已完成', done: true });
- const rPages = state.reading.logs.filter(l => l.date === today).reduce((sum, l) => sum + (l.pages || 0), 0);
- if (rPages === 0) s.push({ icon: '📚', text: '记录阅读进度' });
- else s.push({ icon: '📚', text: '已阅读 ' + rPages + ' 页', done: true });
- const wWords = state.writing.logs.filter(l => l.date === today).reduce((sum, l) => sum + (l.words || 0), 0);
- if (wWords === 0) s.push({ icon: '✍', text: '写一些文字' });
- else s.push({ icon: '✍', text: '已写 ' + wWords + ' 字', done: true });
- const ev = (state.schedule.events[today] || []).length;
- if (ev === 0) s.push({ icon: '📅', text: '查看今日日程' });
- else s.push({ icon: '📅', text: '今日有 ' + ev + ' 项日程', done: true });
- const fin = state.finance.records.filter(r => r.date === today).length;
- if (fin === 0) s.push({ icon: '', text: '记录今日收支' });
- else s.push({ icon: '', text: '已记录 ' + fin + ' 笔收支', done: true });
-
- $('#taskSuggest').innerHTML = '<div class="suggest-label">💡 智能建议</div>' +
- '<div class="suggest-chips">' + s.map(chip =>
- '<span class="suggest-chip ' + (chip.done ? 'done' : '') + '">' +
- (chip.done ? ' ' : chip.icon + ' ') + chip.text +
- '</span>'
- ).join('') + '</div>';
-
- // 累计积分（任务按优先级打卡累积）
- const pb = $('#pointsBadge');
- if (pb) pb.textContent = ' ' + (state.points || 0) + ' 积分';
-
- // —— 我的任务（自定义，可增删改/标记完成）——
- const tasks = (state.tasks || []).slice();
- const order = { high: 0, medium: 1, low: 2 };
- tasks.sort((a, b) => {
- if (a.done !== b.done) return a.done ? 1 : -1; // 未完成的排前面
- return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
- });
-
- if (tasks.length === 0) {
- $('#taskList').innerHTML = '<div class="empty-state"><span class="empty-state-icon">📝</span>还没有自定义任务，点「＋ 添加任务」规划你的一天吧～</div>';
- return;
- }
-
- $('#taskList').innerHTML = tasks.map(t => {
- const p = TASK_PRIORITY[t.priority] || TASK_PRIORITY.medium;
- const deadline = t.deadline ? '<span class="task-deadline">⏰ ' + t.deadline + '</span>' : '';
- const taskPts = (INTERACTION_RULES['task_' + t.priority] || {}).points || 0;
- return `
- <div class="task-card ${p.cls} ${t.done ? 'done' : ''}" data-task-id="${t.id}">
- <div class="task-check ${t.done ? 'checked' : ''}" data-act="toggle">${t.done ? '✓' : ''}</div>
- <div class="task-main">
- <div class="task-title">${escapeHtml(t.title)}</div>
- ${t.desc ? `<div class="task-desc">${escapeHtml(t.desc)}</div>` : ''}
- <div class="task-meta">
- <span class="task-prio ${p.cls}">${p.label}优先级</span>
- <span class="task-points">打卡 +${taskPts}分</span>
- ${deadline}
- </div>
- </div>
- <div class="task-actions">
- <button class="task-action-btn" data-act="edit" title="编辑"></button>
- <button class="task-action-btn" data-act="delete" title="删除">🗑</button>
- </div>
- </div>`;
- }).join('');
-
- $$('.task-card').forEach(card => {
- const id = card.dataset.taskId;
- card.querySelector('.task-check').onclick = (e) => { e.stopPropagation(); toggleTask(id); };
- card.querySelector('[data-act="edit"]').onclick = (e) => { e.stopPropagation(); openTaskModal(id); };
- card.querySelector('[data-act="delete"]').onclick = (e) => { e.stopPropagation(); deleteTask(id); };
- });
- }
-
- function toggleTask(id) {
- const t = (state.tasks || []).find(x => x.id === id);
- if (!t) return;
- const wasDone = !!t.done;
- t.done = !t.done;
-
- // 打卡获取能量核心功能整合至此：按任务优先级分配能量/积分/心情
- // 高优先级 → 更高积分（引导聚焦重点）；取消打卡则回退数值
- const ruleKey = 'task_' + (t.priority || 'medium');
- const res = applyInteraction(ruleKey, wasDone); // wasDone=true 表示本次是「取消完成」，需回退
- if (res) {
- const action = wasDone ? '已取消完成' : '完成打卡';
- toast(`${action}：${res.summary}`);
- }
- saveData();
- renderDashboard();
- renderTodayTasks();
- }
-
- function deleteTask(id) {
- confirmDialog('确定删除这个任务吗？删除后无法恢复。', () => {
- state.tasks = (state.tasks || []).filter(x => x.id !== id);
- saveData();
- renderTodayTasks();
- toast('🗑 已删除任务');
- });
- }
-
- function openTaskModal(id) {
- const isEdit = !!id;
- const t = isEdit ? (state.tasks || []).find(x => x.id === id) : null;
- const title = t ? t.title : '';
- const desc = t ? (t.desc || '') : '';
- const deadline = t ? (t.deadline || '') : '';
- const priority = t ? t.priority : 'medium';
-
- const content = `
- <div class="modal-field">
- <label class="modal-label">任务标题 *</label>
- <input class="modal-input" id="taskTitle" placeholder="例如：写完第三章大纲" value="${escapeHtml(title)}">
- </div>
- <div class="modal-field">
- <label class="modal-label">描述（可选）</label>
- <textarea class="modal-textarea" id="taskDesc" placeholder="补充说明...">${escapeHtml(desc)}</textarea>
- </div>
- <div class="modal-field">
- <label class="modal-label">截止时间（可选）</label>
- <input class="modal-input" id="taskDeadline" type="date" value="${deadline}">
- </div>
- <div class="modal-field">
- <label class="modal-label">优先级</label>
- <select class="modal-select" id="taskPriority">
- <option value="high" ${priority === 'high' ? 'selected' : ''}>🔴 高优先级</option>
- <option value="medium" ${priority === 'medium' ? 'selected' : ''}>🟠 中优先级</option>
- <option value="low" ${priority === 'low' ? 'selected' : ''}>🟢 低优先级</option>
- </select>
- </div>
- `;
-
- showModal(isEdit ? ' 编辑任务' : '＋ 添加任务', content, () => {
- const tTitle = $('#taskTitle').value.trim();
- if (!tTitle) { toast('请填写任务标题'); return; }
- const tDesc = $('#taskDesc').value.trim();
- const tDeadline = $('#taskDeadline').value;
- const tPriority = $('#taskPriority').value;
-
- if (isEdit) {
- t.title = tTitle; t.desc = tDesc; t.deadline = tDeadline; t.priority = tPriority;
- } else {
- state.tasks = state.tasks || [];
- state.tasks.push({
- id: 'tk_' + Date.now(),
- title: tTitle, desc: tDesc, deadline: tDeadline,
- priority: tPriority, done: false, createdAt: getDateStr(new Date()),
- });
- }
- saveData();
- renderTodayTasks();
- toast(isEdit ? '✓ 已更新任务' : '✓ 已添加任务');
- });
- }
 
 
  // ============================================
@@ -1267,6 +1176,9 @@
  renderDiaryCalendar();
  renderDiaryFilters();
  renderDiaryStats();
+ renderDiaryTagEditor();
+ renderDiaryTimeBar();
+ renderDiaryTagFilterBar();
 
  $$('.mood-pick').forEach(el => {
  el.onclick = () => {
@@ -1331,13 +1243,15 @@
  }
  state.checkin.diary[today] = !state.checkin.diary[today];
  saveData();
- if (state.checkin.diary[today]) {
- var r = applyInteraction('diary');
- updateMascotStats();
- toast('✓ 打卡成功！' + (r ? r.summary : ''));
- } else {
- toast('已取消打卡');
- }
+if (state.checkin.diary[today]) {
+var r = applyInteraction('diary');
+updateMascotStats();
+toast('✓ 打卡成功！' + (r ? r.summary : ''));
+} else {
+// 误触取消打卡 → 退回相应能量
+awardEnergy('diary', { reverse: true });
+toast('已取消打卡');
+}
  // 打卡后同步刷新日历/统计/历史：刚落盘的今日日记要立刻能在日历上点开查看
  $$('.mood-pick').forEach(p => p.classList.toggle('selected', p.dataset.mood === (state.diary.entries[today] || {}).mood));
  $$('.weather-pick').forEach(p => p.classList.toggle('selected', p.dataset.weather === (state.diary.entries[today] || {}).weather));
@@ -1519,6 +1433,128 @@
  });
  }
 
+ // ============================================================
+ // 🏷 日记增强：标签 / 时间筛选 / 标签筛选（均由本任务新增，不动原有逻辑）
+ // ============================================================
+ const DIARY_TAG_PRESET = ['日常', '创作随笔', '心情', '灵感碎记']; // 预设标签
+
+ // 取「今天」日记条目（不存在则创建空壳，保证 tags 为数组）
+ function ensureTodayEntry() {
+ const today = getDateStr(new Date());
+ if (!state.diary.entries[today]) state.diary.entries[today] = { mood: '', weather: '', content: '', tags: [] };
+ if (!Array.isArray(state.diary.entries[today].tags)) state.diary.entries[today].tags = [];
+ return state.diary.entries[today];
+ }
+
+ // 本周一 0 点（用于「本周」筛选）
+ function getWeekStart(d) {
+ const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+ const day = dt.getDay(); // 0=周日..6=周六
+ const diff = (day === 0) ? -6 : (1 - day);
+ dt.setDate(dt.getDate() + diff);
+ return dt;
+ }
+
+ // 今日面板：标签编辑器（预设 + 自定义）
+ function renderDiaryTagEditor() {
+ const box = $('#diaryTagEditor');
+ if (!box) return;
+ const entry = ensureTodayEntry();
+ const tags = Array.isArray(entry.tags) ? entry.tags : [];
+ const all = DIARY_TAG_PRESET.slice();
+ tags.forEach(t => { if (all.indexOf(t) < 0) all.push(t); });
+ let html = '<span class="filter-label">🏷 标签：</span>';
+ html += '<button class="filter-chip ' + (tags.length === 0 ? 'selected' : '') + '" data-tag="">无</button>';
+ html += all.map(t => {
+ const on = tags.indexOf(t) >= 0;
+ return '<button class="filter-chip diary-tag-chip ' + (on ? 'selected' : '') + '" data-tag="' + escapeHtml(t) + '">' + escapeHtml(t) + '</button>';
+ }).join('');
+ html += '<input class="diary-tag-input" id="diaryTagInput" placeholder="自定义标签，回车添加" style="width:120px;">';
+ box.innerHTML = html;
+ box.querySelectorAll('[data-tag]').forEach(btn => {
+ btn.onclick = () => {
+ const t = btn.getAttribute('data-tag');
+ const e = ensureTodayEntry();
+ const arr = Array.isArray(e.tags) ? e.tags.slice() : [];
+ if (t === '') { e.tags = []; }
+ else {
+ const i = arr.indexOf(t);
+ if (i >= 0) arr.splice(i, 1); else arr.push(t);
+ e.tags = arr;
+ }
+ saveData();
+ renderDiaryTagEditor();
+ renderDiaryTagFilterBar();
+ renderDiaryHistorySection();
+ };
+ });
+ const inp = $('#diaryTagInput');
+ if (inp) inp.onkeydown = (ev) => {
+ if (ev.key === 'Enter') {
+ const v = (inp.value || '').trim();
+ if (!v) return;
+ const e = ensureTodayEntry();
+ const arr = Array.isArray(e.tags) ? e.tags.slice() : [];
+ if (arr.indexOf(v) < 0) arr.push(v);
+ e.tags = arr;
+ saveData();
+ renderDiaryTagEditor();
+ renderDiaryTagFilterBar();
+ renderDiaryHistorySection();
+ }
+ };
+ }
+
+ // 历史面板：时间筛选（全部 / 本周 / 本月）
+ function renderDiaryTimeBar() {
+ const box = $('#diaryTimeBar');
+ if (!box) return;
+ const cur = state.diary.timeRange || 'all';
+ const opts = [['all', '全部'], ['week', '本周'], ['month', '本月']];
+ box.innerHTML = '<span class="filter-label">🗓 时间：</span>' + opts.map(o =>
+ '<button class="filter-chip ' + (cur === o[0] ? 'selected' : '') + '" data-range="' + o[0] + '">' + o[1] + '</button>'
+ ).join('');
+ box.querySelectorAll('[data-range]').forEach(b => {
+ b.onclick = () => {
+ state.diary.timeRange = b.getAttribute('data-range');
+ saveData();
+ renderDiaryTimeBar();
+ renderDiaryHistorySection();
+ };
+ });
+ }
+
+ // 历史面板：标签筛选（按已用标签过滤）
+ function renderDiaryTagFilterBar() {
+ const box = $('#diaryTagFilterBar');
+ if (!box) return;
+ const used = {};
+ Object.keys(state.diary.entries).forEach(d => {
+ const t = state.diary.entries[d].tags;
+ if (Array.isArray(t)) t.forEach(x => { used[x] = (used[x] || 0) + 1; });
+ });
+ const all = DIARY_TAG_PRESET.slice();
+ Object.keys(used).forEach(t => { if (all.indexOf(t) < 0) all.push(t); });
+ const cur = state.diary.filterTag || '';
+ let html = '<span class="filter-label">🏷 按标签：</span>';
+ html += '<button class="filter-chip ' + (!cur ? 'selected' : '') + '" data-ftag="">全部</button>';
+ html += all.map(t => {
+ const cnt = used[t] || 0;
+ return '<button class="filter-chip diary-tag-chip ' + (cur === t ? 'selected' : '') + '" data-ftag="' + escapeHtml(t) + '">' + escapeHtml(t) + ' <span class="chip-count">' + cnt + '</span></button>';
+ }).join('');
+ box.innerHTML = html;
+ box.querySelectorAll('[data-ftag]').forEach(b => {
+ b.onclick = () => {
+ const t = b.getAttribute('data-ftag');
+ state.diary.filterTag = t || null;
+ saveData();
+ renderDiaryTagFilterBar();
+ renderDiaryHistorySection();
+ };
+ });
+ }
+
+ // ============================================================
  // 渲染统计卡片（本月主导心情/天气/心情得分/记录天数 + 心情×天气最常共现）
  function renderDiaryStats() {
  const wrap = $('#diaryStatsWrap');
@@ -1604,6 +1640,27 @@
  const fw = state.diary.filterWeather;
  if (fm) dates = dates.filter(d => state.diary.entries[d].mood === fm);
  if (fw) dates = dates.filter(d => state.diary.entries[d].weather === fw);
+
+ // —— 新增：时间范围筛选（本周/本月/全部）——
+ const tr = state.diary.timeRange || 'all';
+ if (tr === 'week' || tr === 'month') {
+ const now = new Date();
+ const ym = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+ if (tr === 'month') {
+ dates = dates.filter(d => d.slice(0, 7) === ym);
+ } else {
+ const wsStr = getDateStr(getWeekStart(now));
+ dates = dates.filter(d => d >= wsStr);
+ }
+ }
+ // —— 新增：按标签筛选 ——
+ const ft = state.diary.filterTag;
+ if (ft) {
+ dates = dates.filter(d => {
+ const e = state.diary.entries[d];
+ return e && Array.isArray(e.tags) && e.tags.indexOf(ft) >= 0;
+ });
+ }
 
  // 优先：根据用户指定的查询日期筛到一条最接近的日记
  if (state.diary.historyPickDate) {
@@ -1744,6 +1801,30 @@
  }
  }
 
+ // 随手速记：把短句追加进「今天」的日记条目（供全局速记弹窗调用）
+ // 不进入日记页也能记录；保留文本框里尚未防抖落盘的内容，避免丢失。
+ window.__diaryQuickNote = function (text) {
+ const e = ensureTodayEntry();
+ const ta = document.getElementById('diaryContent');
+ const live = ta ? ta.value : '';
+ const base = (live && live.trim()) ? live : (e.content || '');
+ const now = new Date();
+ const hh = ('0' + now.getHours()).slice(-2), mm = ('0' + now.getMinutes()).slice(-2);
+ const line = '· [' + hh + ':' + mm + '] 速记：' + text;
+ e.content = (base && base.trim()) ? (base + '\n' + line) : line;
+ if (!e.mood) e.mood = MOOD_LIST[0].id;
+ if (!e.weather) e.weather = WEATHER_LIST[0].id;
+ saveData();
+ if (window.toast) window.toast('✓ 已存入今日日记');
+ const dp = document.getElementById('diaryPanelToday');
+ if (dp && dp.style.display !== 'none') {
+ renderDiaryCalendar();
+ renderDiaryStats();
+ renderDiaryHistorySection();
+ renderDiaryTagFilterBar();
+ }
+ };
+
  // 在已排序(倒序)日期数组里找与 target 最接近的索引
  function findClosestDateIdx(sortedDatesDesc, target) {
  if (!sortedDatesDesc.length) return -1;
@@ -1809,10 +1890,12 @@
  // 删除这条日记
  const delBtn = $('#diaryDetailDeleteBtn');
  if (delBtn) delBtn.onclick = () => {
- const doDelete = () => {
- delete state.diary.entries[dateStr];
- delete state.checkin.diary[dateStr];
- saveData();
+const doDelete = () => {
+// 删除当日日记 → 若曾打卡则退回能量
+if (state.checkin.diary[dateStr]) awardEnergy('diary', { reverse: true });
+delete state.diary.entries[dateStr];
+delete state.checkin.diary[dateStr];
+saveData();
  $('#modalRoot').innerHTML = '';
  renderDiary();
  toast('🗑 已删除 ' + dateStr + ' 的日记');
@@ -1975,6 +2058,22 @@
  toast('✓ 已加入书架（想读）');
  }
 
+ // 暴露给书单推荐模块（bookRecommend.js）调用，不影响其他逻辑
+ window.addBookToShelf = addBookToShelf;
+ window.toast = toast;
+ // 暴露通用弹窗/确认/转义，供各增强模块（作品集等）直接复用，避免重复造轮子
+ window.showModal = showModal;
+ window.confirmDialog = confirmDialog;
+ window.escapeHtml = escapeHtml;
+// 暴露给健身模块（fitness_app.js）：写入打卡状态供「桌面」页推荐，以及持久化
+window.state = state;
+window.saveData = saveData;
+window.getDateStr = getDateStr;
+// 暴露统一能量结算与桌面助手状态刷新，供各功能模块（健身/理财/日程/生活/视野/AI 等）接入"任何行为都给能量"
+window.awardEnergy = awardEnergy;
+window.updateMascotStats = updateMascotStats;
+window.INTERACTION_RULES = INTERACTION_RULES;
+
  // 一次性迁移：为已存在的书补齐默认状态
  function migrateReadingStatus() {
  if (!state.reading.bookStatus) state.reading.bookStatus = {};
@@ -2028,14 +2127,15 @@
  `, () => {
  const rating = parseInt($('#reviewStars').dataset.rating || existing.rating);
  const content = $('#reviewContent').value.trim();
- state.reading.reviews[bookId] = {
- rating: isNaN(rating) ? 0 : rating,
- content,
- updatedAt: new Date().toISOString(),
- };
- saveData();
- renderReading();
- toast('✓ 读后感已保存');
+state.reading.reviews[bookId] = {
+rating: isNaN(rating) ? 0 : rating,
+content,
+updatedAt: new Date().toISOString(),
+};
+saveData();
+renderReading();
+toast('✓ 读后感已保存');
+if (!existing.content) awardEnergy('book_review');
  });
  // 评分交互
  $$('#reviewStars .review-star').forEach(el => {
@@ -2092,187 +2192,12 @@
 
  function renderReading() {
  const today = getDateStr(new Date());
- const favorites = state.reading.favorites || [];
-
- // 类型筛选标签
- $('#bookTypeTabs').innerHTML = (DATA.BOOK_TYPES || []).map(t =>
- `<div class="book-type-tab ${t.id === bookFilterType ? 'active' : ''}" data-type="${t.id}">${t.label}</div>`
- ).join('');
- $$('.book-type-tab').forEach(tab => {
- tab.onclick = () => { bookFilterType = tab.dataset.type; bookRefreshOffset = 0; bookOnlineCache = null; renderReading(); };
- });
- $('#bookRecommendDate').textContent = today;
-
- // 渲染骨架（loading 占位）
- const renderList = (recs, isOnline) => {
- // 防御性去重：任何来源（在线/缓存/兜底）都保证书名唯一，杜绝重复条目
- const shownSeen = new Set();
- const clean = (recs || []).filter(b => {
- const k = (b && b.title || '').trim();
- if (!k || shownSeen.has(k)) return false;
- shownSeen.add(k);
- return true;
- });
- $('#bookRecommendList').innerHTML = clean.map(b => {
- const fav = favorites.includes(b.title);
- const onShelf = state.reading.books.some(x => x.title === b.title);
- const typeLabel = (DATA.BOOK_TYPES.find(t => t.id === b.type) || {}).label || '';
- // 注意：不再渲染 b.cover/图标；卡片就是书名
- return `
- <div class="book-card" data-book="${encodeURIComponent(b.title)}" data-link="${encodeURIComponent(b.link||'')}">
- <div class="book-title-only">${escapeHtml(b.title)}</div>
- <div class="book-author">${escapeHtml(b.author || '')}</div>
- <div class="book-intro">${escapeHtml(b.intro || '')}</div>
- <div class="book-foot">
- <span class="book-type-badge">${typeLabel}</span>
- <span class="book-act book-fav ${fav ? 'faved' : ''}" data-fav="${encodeURIComponent(b.title)}">${fav ? '★ 已收藏' : '☆ 收藏'}</span>
- </div>
- <div class="book-actions">
- <span class="book-act" data-shelf="${encodeURIComponent(b.title)}" data-author="${encodeURIComponent(b.author||'')}">${onShelf ? '✓ 已在书架' : '＋ 加入书架'}</span>
- <span class="book-act" data-read="${encodeURIComponent(b.title)}" data-readlink="${encodeURIComponent(b.link||'')}">📖 微信读书</span>
- </div>
- </div>`;
- }).join('');
-
- // 顶部小标识：精选书库 / 离线 / 加载中
- const tagText = isOnline === true
- ? '📚 精选书库'
- : isOnline === 'curated'
- ? '📚 精选书库'
- : isOnline === 'openlibrary'
- ? '📚 精选书库'
- : isOnline === 'loading'
- ? '⏳ 正在选书…'
- : ' 兜底书库';
- const tagClass = isOnline === 'loading' ? 'loading' : (isOnline ? 'online' : 'offline');
- const tag = `<span class="data-source-tag ${tagClass}">${tagText}</span>`;
- const old = document.getElementById('bookDataSourceTag');
- if (old) old.remove();
- const sec = document.querySelector('.book-recommend-section .section-header');
- if (sec) {
- const wrap = document.createElement('div');
- wrap.id = 'bookDataSourceTag';
- wrap.style.marginLeft = '10px';
- wrap.innerHTML = tag;
- sec.insertBefore(wrap, sec.querySelector('.section-header-right'));
- }
-
- // 事件绑定
- $$('.book-card').forEach(card => {
- card.onclick = (e) => {
- if (e.target.closest('.book-act')) return;
- const title = decodeURIComponent(card.dataset.book);
- const link = decodeURIComponent(card.dataset.link || '');
- const offline = buildOfflinePool('all').find(x => x.title === title)
- || (DATA.DAILY_BOOKS.find(x => x.title === title) && {
- title: DATA.DAILY_BOOKS.find(x => x.title === title).title,
- author: DATA.DAILY_BOOKS.find(x => x.title === title).author,
- type: DATA.DAILY_BOOKS.find(x => x.title === title).type,
- intro: DATA.DAILY_BOOKS.find(x => x.title === title).intro,
- link: '',
- });
- const b = offline || { title, author:'', type:bookFilterType, intro:'', link };
- if (!b) return;
- const fav = (state.reading.favorites || []).includes(b.title);
- const onShelf = state.reading.books.some(x => x.title === b.title);
- const typeLabel = (DATA.BOOK_TYPES.find(t => t.id === b.type) || {}).label || '';
- showModal(`📖 ${escapeHtml(b.title)}`, `
- <div class="modal-field"><label class="modal-label">作者</label><div class="modal-static">${escapeHtml(b.author||'佚名')}</div></div>
- <div class="modal-field"><label class="modal-label">分类</label><div class="modal-static">${typeLabel}</div></div>
- <div class="modal-field"><label class="modal-label">简介</label><div class="modal-static modal-intro">${escapeHtml(b.intro||'暂无简介')}</div></div>
- <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
- <button class="btn ${fav ? 'btn-plain' : ''}" id="modalFavBtn" style="${fav ? 'background:var(--pink-500);color:var(--on-primary);' : ''}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
- <button class="btn" id="modalShelfBtn">${onShelf ? '✓ 已在书架' : '＋ 加入书架'}</button>
- <button class="btn primary" id="modalReadBtn">🔗 跳转阅读</button>
- </div>
- `, null);
- const cf = $('#modalConfirm'); if (cf) cf.style.display = 'none';
- const cc = $('#modalCancel'); if (cc) cc.textContent = '关闭';
- const favBtn = $('#modalFavBtn'); if (favBtn) favBtn.onclick = () => toggleBookFav(b.title);
- const shelfBtn = $('#modalShelfBtn'); if (shelfBtn) shelfBtn.onclick = () => addBookToShelf(b.title, b.author);
- const readBtn = $('#modalReadBtn'); if (readBtn) readBtn.onclick = () => openBookRead(b.title, b.link);
- };
- });
- $$('[data-fav]').forEach(btn => {
- btn.onclick = (e) => { e.stopPropagation(); toggleBookFav(decodeURIComponent(btn.dataset.fav)); };
- });
- $$('[data-shelf]').forEach(btn => {
- btn.onclick = (e) => { e.stopPropagation();
- addBookToShelf(decodeURIComponent(btn.dataset.shelf), decodeURIComponent(btn.dataset.author||''));
- };
- });
- $$('[data-read]').forEach(btn => {
- btn.onclick = (e) => { e.stopPropagation();
- openBookRead(decodeURIComponent(btn.dataset.read), decodeURIComponent(btn.dataset.readlink||''));
- };
- });
- };
-
- // 取数据：先尝试在线拉取，失败则用离线兜底
- const showLoading = () => {
- $('#bookRecommendList').innerHTML = Array(5).fill(0).map(() =>
- `<div class="book-card book-skel"><div class="book-skel-bar"></div><div class="book-skel-bar short"></div><div class="book-skel-bar"></div></div>`
- ).join('');
- // 加载中标识
- const old = document.getElementById('bookDataSourceTag');
- if (old) old.remove();
- const sec = document.querySelector('.book-recommend-section .section-header');
- if (sec) {
- const wrap = document.createElement('div');
- wrap.id = 'bookDataSourceTag';
- wrap.style.marginLeft = '10px';
- wrap.innerHTML = '<span class="data-source-tag loading">⏳ 正在选书…</span>';
- sec.insertBefore(wrap, sec.querySelector('.section-header-right'));
- }
- };
-
- // 缓存命中（同分类 + 5 分钟内）直接渲染
- const cacheKey = bookFilterType;
- if (bookOnlineCache && bookOnlineCache.type === cacheKey && Date.now() - bookOnlineCache.ts < 5*60*1000) {
- const recs = bookOnlineCache.items.slice(0, 5);
- if (recs.length) { renderList(recs, true); return; }
- }
-
- showLoading();
- if (bookOnlineLoading) return;
- bookOnlineLoading = true;
- fetchOnlineBooks(bookFilterType, bookRefreshOffset)
- .then(items => {
- bookOnlineLoading = false;
- if (!items || items.length === 0) throw new Error('empty');
- // 与本地书去重后再取 5 本
- const localTitles = new Set((DATA.DAILY_BOOKS || []).map(b => b.title));
- const seen = new Set();
- const uniq = items.filter(b => { if (seen.has(b.title)) return false; seen.add(b.title); return true; });
- const final = uniq.filter(b => !localTitles.has(b.title)).concat(uniq.filter(b => localTitles.has(b.title))).slice(0, 5);
- bookOnlineCache = { type: cacheKey, items: final, ts: Date.now() };
- // 数据来源标识（curated = 精选书库）
- const source = items[0] && items[0].source === 'curated' ? 'curated' : true;
- if (final.length) renderList(final, source);
- else throw new Error('empty after filter');
- })
- .catch(() => {
- bookOnlineLoading = false;
- // 联网失败 → 用本地 DAILY_BOOKS 兜底；按 offset 滚动保证不重复
- const pool = buildOfflinePool(bookFilterType);
- const seed = parseInt(today.replace(/-/g, ''), 10) + bookRefreshOffset;
- const shuffled = [...pool].sort((a, b) => hashStr(a.title + seed) - hashStr(b.title + seed));
- const final = shuffled.slice(0, Math.min(5, shuffled.length));
- if (final.length) renderList(final, false);
- else $('#bookRecommendList').innerHTML = '<div class="empty-state"><span class="empty-state-icon">📚</span>该分类暂无推荐，换一批试试～</div>';
- });
-
- // 手动刷新推荐：换 offset 即可触发新一轮在线拉取
- const refreshBtn = $('#bookRefreshBtn');
- if (refreshBtn) {
- refreshBtn.onclick = () => {
- bookRefreshOffset++;
- // 清掉当前分类的缓存，强制重新拉
- if (bookOnlineCache && bookOnlineCache.type === bookFilterType) bookOnlineCache = null;
- renderReading();
- toast('🔄 正在换一批书…');
- };
- }
+  // 【书单推荐已重构为纯前端】
+  // 书籍数据见 js/books.js，推荐逻辑见 js/bookRecommend.js。
+  // 旧实现依赖在线抓取（国内常被阻断），已全部移除。
+  if (typeof window.renderBookRecommend === 'function') {
+    window.renderBookRecommend();
+  }
 
  // 统计
  const todayPages = state.reading.logs.filter(l => l.date === today).reduce((s, l) => s + l.pages, 0);
@@ -2506,13 +2431,14 @@
  const author = $('#newBookAuthor').value.trim();
  const totalPages = parseInt($('#newBookPages').value) || 0;
  if (!title) { toast('请输入书名'); return; }
- state.reading.books.push({
- id: 'book_' + Date.now(),
- title, author, totalPages, cover: '',
- });
- saveData();
- renderReading();
- toast('✓ 已添加到书架');
+state.reading.books.push({
+id: 'book_' + Date.now(),
+title, author, totalPages, cover: '',
+});
+awardEnergy('book_add');
+saveData();
+renderReading();
+toast('✓ 已添加到书架');
  });
  };
 
@@ -2554,163 +2480,13 @@
  }
 
  // ============================================
- // 💡 灵感
- // ============================================
- const SOURCES = [
- { id: 'all', name: '全部', emoji: '' },
- { id: 'douyin', name: '抖音', emoji: '🎵' },
- { id: 'xhs', name: '小红书', emoji: '' },
- { id: 'bilibili', name: 'B站', emoji: '' },
- { id: 'weibo', name: '微博', emoji: '' },
- { id: 'zhihu', name: '知乎', emoji: '💡' },
- ];
-
- // 灵感推荐：当前分类与分页偏移（模块级，跨渲染保持）
- let inspActiveCat = 'all';
- let inspOffset = 0;
-
- function renderInspiration() {
- const PLATFORMS = DATA.INSPIRATION_PLATFORMS || {};
- const CATS = DATA.INSPIRATION_CATEGORIES || [];
- const POOL = DATA.INSPIRATION_POOL || [];
- const PROFILE = DATA.INSPIRATION_PROFILE || {};
- const CONTEXT = DATA.INSPIRATION_CONTEXT || {};
- const timeKey = getTimeOfDayKey(new Date());
- if (!state.inspirationBehavior) state.inspirationBehavior = {};
-
- // 精准评分：用户画像权重 × 上下文场景(时段)权重 × 行为习惯加成
- function scoreItem(i) {
- const base = PROFILE[i.category] || 1;
- const ctx = (CONTEXT[timeKey] && CONTEXT[timeKey][i.category]) || 1;
- const beh = state.inspirationBehavior[i.category] || 0;
- const behFactor = 1 + Math.min(beh / 8, 1.5); // 越常看越推，最高 2.5 倍
- return base * ctx * behFactor;
- }
-
- // 推荐理由（取权重最高的维度作为说明）
- function reasonItem(i) {
- const base = PROFILE[i.category] || 1;
- const beh = state.inspirationBehavior[i.category] || 0;
- const ctx = (CONTEXT[timeKey] && CONTEXT[timeKey][i.category]) || 1;
- const rs = [];
- if (base >= 2.4) rs.push({ w: 3, t: '🎯 你的专属偏好' });
- if (beh >= 2) rs.push({ w: 2, t: ' 你常看这类' });
- if (ctx >= 1.3) rs.push({ w: 1, t: timeKey === 'evening' ? ' 晚间放松' : timeKey === 'night' ? ' 深夜静读' : ' 时段优选' });
- rs.sort((a, b) => b.w - a.w);
- return rs.length ? rs[0].t : ' 为你精选';
- }
-
- // 记录行为习惯：点击分类/打开卡片都会强化该品类偏好
- function trackBehavior(cat) {
- if (cat === 'all') return;
- state.inspirationBehavior[cat] = (state.inspirationBehavior[cat] || 0) + 1;
- saveData();
- }
-
- // 单张卡片：链接指向该条内容所属平台的【真实可打开的页面】
- // （bilibili 用真实 BV id、豆瓣用真实书/影页面、喜马拉雅用真实专辑）
- // 封面图：优先用 entry.pic（真实 B 站 archive 封面），否则用稳定图片兜底
- function cardHTML(i) {
- const p = PLATFORMS[i.platform] || { name: '网页', icon: '🔗' };
- const cat = CATS.find(c => c.id === i.category) || { label: '' };
- const url = i.url || (p.build && p.build(i.keyword)) || '#';
- const pic = getInspirationPic(i);
- return `
- <a class="insp-card bilibili-card cat-${i.category}" data-category="${i.category}" href="${url}" target="_blank" rel="noopener noreferrer">
- <div class="insp-thumb" style="background-image: url('${pic}')">
- <div class="cat-badge">${cat.label}</div>
- </div>
- <div class="insp-body">
- <div class="insp-title">${escapeHtml(i.title)}</div>
- <div class="insp-desc">${escapeHtml(i.desc)}</div>
- <div class="insp-tags">${(i.tags || []).map(t => `<span class="insp-tag">${t}</span>`).join('')}</div>
- <div class="insp-reason">${reasonItem(i)}</div>
- <div class="insp-footer">
- <span class="insp-platform">${p.icon} ${p.name}</span>
- <span class="insp-go">查看 →</span>
- </div>
- </div>
- </a>`;
- }
-
- // 灵感封面图：entry.pic 优先，否则用 picsum 兜底
- function getInspirationPic(i) {
- if (i.pic) return i.pic;
- const seed = (i.url || i.title || i.keyword || '').replace(/[^a-zA-Z0-9]/g, '');
- return `https://picsum.photos/seed/${encodeURIComponent(seed || 'inspire')}/480/270`;
- }
-
- function sortedPool(catId) {
- const list = catId === 'all' ? POOL : POOL.filter(i => i.category === catId);
- return list.slice().sort((a, b) => scoreItem(b) - scoreItem(a));
- }
-
- function renderList(catId) {
- let list;
- if (catId === 'all') {
- const all = sortedPool('all');
- list = all.slice(inspOffset, inspOffset + 8);
- if (list.length === 0) { inspOffset = 0; list = all.slice(0, 8); }
- } else {
- list = sortedPool(catId);
- }
- if (!list || list.length === 0) {
- $('#inspirationList').innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><span class="empty-state-icon">💡</span>这个分类暂时没有内容，换一个看看～</div>';
- return;
- }
- $('#inspirationList').innerHTML = list.map(cardHTML).join('');
- // 打开卡片即记录行为习惯（跳转真实平台的同时学习你的偏好）
- $$('.insp-card').forEach(card => {
- card.onclick = () => trackBehavior(card.dataset.category);
- });
- }
-
- // 分类标签
- $('#sourceTabs').innerHTML = CATS.map(c =>
- `<div class="source-tab ${c.id === inspActiveCat ? 'active' : ''}" data-cat="${c.id}">${c.label}</div>`
- ).join('');
-
- renderList(inspActiveCat);
-
- $$('.source-tab').forEach(tab => {
- tab.onclick = () => {
- $$('.source-tab').forEach(t => t.classList.remove('active'));
- tab.classList.add('active');
- inspActiveCat = tab.dataset.cat;
- inspOffset = 0;
- trackBehavior(inspActiveCat);
- renderList(inspActiveCat);
- };
- });
-
- // 换一批：基于个性化评分的分页轮播
- $('#inspirationRefresh').onclick = () => {
- if (inspActiveCat === 'all') {
- const all = sortedPool('all');
- inspOffset += 8;
- if (inspOffset >= all.length) inspOffset = 0;
- renderList('all');
- toast('已更新你的个性化推荐 🎯');
- } else {
- renderList(inspActiveCat);
- toast('已刷新该分类推荐 ');
- }
- };
-
- const shownCount = inspActiveCat === 'all'
- ? Math.min(8, sortedPool('all').length)
- : sortedPool(inspActiveCat).length;
- $('#inspirationDate').textContent = `🎯 已根据你的画像·习惯·时段个性化推荐 ${shownCount} 条 · 内容来自 哔哩哔哩 / 豆瓣 / 喜马拉雅 等真实平台`;
-
- // 搜索
- $('#inspirationSearch').oninput = (e) => {
- const q = e.target.value.toLowerCase();
- $$('.insp-card').forEach((card) => {
- const text = card.textContent.toLowerCase();
- card.style.display = text.includes(q) ? '' : 'none';
- });
- };
- }
+// 💡 灵感
+// ============================================
+// 灵感板块已重构为纯前端：数据见 js/inspirations.js，渲染/交互见 js/inspiration.js。
+// 旧实现依赖 DATA.INSPIRATION_* 与平台搜索链接，已全部移除，改为真实原文链接。
+if (typeof window.renderInspiration === "function") {
+  window.renderInspiration();
+}
 
  // ============================================
  // 🎓 英语 - 间隔重复学习系统
@@ -2770,9 +2546,10 @@
  ws.nextReview = getDateStr(next);
  ws.lastStatus = status;
  ws.lastSeen = today;
- state.english.wordStates[en] = ws;
- saveData();
- }
+state.english.wordStates[en] = ws;
+saveData();
+awardEnergy('english_word', { silent: true });
+}
 
  function isLastDayOfMonth() {
  const today = new Date();
@@ -3130,95 +2907,6 @@
  });
  }
 
- // ============================================
- // 👥 HR
- // ============================================
- let hrRefreshIdx = null;
-
- function renderHR() {
- const today = getDateStr(new Date());
- const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
- const dayIdx = (dayOfYear - 1) % DATA.HR_DAILY.length;
- const entry = DATA.HR_DAILY[hrRefreshIdx !== null ? hrRefreshIdx : dayIdx];
-
- $('#hrDate').textContent = today;
- $('#hrTheme').textContent = `· ${entry.theme}`;
- $('#hrStreak').textContent = ` 连续 ${state.hr.streak} 天`;
- if (state.hr.lastDate === today) {
- $('#hrCheckinBtn').textContent = '✓ 今日已打卡';
- $('#hrCheckinBtn').disabled = true;
- $('#hrCheckinBtn').style.background = 'var(--keroppi-green)';
- } else {
- $('#hrCheckinBtn').disabled = false;
- $('#hrCheckinBtn').textContent = '✓ 完成今日打卡';
- $('#hrCheckinBtn').style.background = '';
- }
-
- // Expandable knowledge card
- $('#hrKnowledge').innerHTML = `
- <div class="expand-card">
- <div class="expand-card-header" data-expand="hr-knowledge-body">
- <span class="expand-card-title">📚 ${entry.theme}</span>
- <span class="expand-arrow">▼</span>
- </div>
- <div class="expand-card-body" id="hr-knowledge-body" style="display:none;">
- <div class="expand-card-text">${entry.knowledge}</div>
- </div>
- </div>
- `;
-
- // Resources with clickable links
- $('#hrResources').innerHTML = entry.resources.map(r => `
- <a class="learn-resource" href="${r.link}" target="_blank" rel="noopener noreferrer">
- <div class="learn-resource-thumb">${r.emoji}</div>
- <div class="learn-resource-info">
- <div class="learn-resource-title">${r.title}</div>
- <div class="learn-resource-meta">${r.platform} · ${r.duration}</div>
- </div>
- <span class="learn-resource-link">▶ 观看</span>
- </a>
- `).join('');
-
- // Toggle expand for HR cards
- $$('.expand-card-header').forEach(h => {
- h.onclick = () => {
- const target = $('#' + h.dataset.expand);
- const arrow = h.querySelector('.expand-arrow');
- if (target.style.display === 'none') {
- target.style.display = 'block';
- arrow.classList.add('expanded');
- } else {
- target.style.display = 'none';
- arrow.classList.remove('expanded');
- }
- };
- });
-
- $('#hrCheckinBtn').onclick = () => {
- if (state.hr.lastDate === today) return;
- const yesterday = getDateStr(new Date(Date.now() - 86400000));
- state.hr.streak = state.hr.lastDate === yesterday ? state.hr.streak + 1 : 1;
- state.hr.lastDate = today;
- state.checkin.hr[today] = true;
- var r = applyInteraction('hr');
- updateMascotStats();
- renderHR();
- toast(`✓ 打卡成功！连续 ${state.hr.streak} 天 ` + (r ? r.summary : ''));
- };
-
- // 手动刷新知识点（随机切换一条 HR_DAILY，且不与当前重复）
- $('#hrRefreshBtn').onclick = () => {
- const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
- const dayIdx = (dayOfYear - 1) % DATA.HR_DAILY.length;
- const currentIdx = hrRefreshIdx !== null ? hrRefreshIdx : dayIdx;
- let idx;
- do { idx = Math.floor(Math.random() * DATA.HR_DAILY.length); }
- while (DATA.HR_DAILY.length > 1 && idx === currentIdx);
- hrRefreshIdx = idx;
- renderHR();
- toast('🔄 已换一批知识点');
- };
- }
 
  // ============================================
  // 💪 健身
@@ -3827,7 +3515,7 @@
  `;
  }).join('');
 
- // 分类饼图（Hello Kitty 风格）
+ // 分类饼图（像素风格）
  const categoryData = {};
  records.filter(r => r.type === 'expense').forEach(r => {
  categoryData[r.category] = (categoryData[r.category] || 0) + r.amount;
@@ -3976,7 +3664,7 @@
  } else {
  $('#profileAvatar').src = NAV_ICON_BASE64[current.file] ? NAV_ICON_BASE64[current.file] : `assets/avatars/${current.file}`;
  }
- $('#currentMascotName').textContent = current ? current.name : '';
+ $('#currentMascotName').textContent = '旺仔';
  $('#mascotEnergyValue').textContent = ` ${state.mascot.energy || 0}`;
  var hv = $('#mascotHealthValue'), mv = $('#mascotMoodValue');
  if (hv) hv.textContent = ` ${state.mascot.health == null ? 70 : state.mascot.health}`;
@@ -4054,17 +3742,199 @@
  $('#clearDataBtn').onclick = () => {
  confirmDialog('⚠ 确定清空所有数据吗？此操作不可恢复！', () => {
  localStorage.removeItem(STORAGE_KEY);
+ try { localStorage.removeItem(BG_KEY); } catch (e) {}
  location.reload();
  });
  };
+ renderBackgroundSettings();
  }
 
- // ============================================
- // 初始化
- // ============================================
- // ============================================
- // 番茄钟 / 专注模块
- // ============================================
+// ============================================
+// 主题背景：用户本地图片作为全站背景
+// 独立 localStorage 键（不污染数据导出、不随清空以外场景丢失）
+// ============================================
+const BG_KEY = 'pixel_workbench_background';
+let _bgImage = ''; // 当前图片 dataURL（模块内缓存，含未保存的实时预览）
+
+// 磨砂玻璃默认参数：导入图片后自动套用，背景柔和自然、保持中性无色
+const FROST_BLUR = 12;   // 模糊半径（px）
+const FROST_SCRIM = 40; // 中性磨砂遮罩强度（%）
+
+// 将图片压缩/缩放后写入（限制最长边 1920，webp 优先、回退 jpeg），避免 localStorage 爆容量
+function bgDownscale(dataUrl, maxDim, cb) {
+  try {
+    const img = new Image();
+    img.onload = function () {
+      const w = img.width, h = img.height;
+      if (w <= maxDim && h <= maxDim) { cb(dataUrl); return; }
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      const cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      let out = cv.toDataURL('image/webp', 0.85);
+      if (out.indexOf('data:image/webp') !== 0) out = cv.toDataURL('image/jpeg', 0.85);
+      cb(out);
+    };
+    img.onerror = function () { cb(dataUrl); };
+    img.src = dataUrl;
+  } catch (e) { cb(dataUrl); }
+}
+
+function bgLoadConfig() {
+  try {
+    const raw = localStorage.getItem(BG_KEY);
+    if (!raw) return null;
+    const cfg = JSON.parse(raw);
+    if (!cfg || typeof cfg !== 'object') return null;
+    return cfg;
+  } catch (e) { return null; }
+}
+
+function bgCollectFromUI() {
+  const sizeEl = document.querySelector('input[name="bgSize"]:checked');
+  const size = sizeEl ? sizeEl.value : 'cover';
+  const blur = parseInt($('#bgBlur').value, 10) || 0;
+  const brightness = parseInt($('#bgBrightness').value, 10) || 100;
+  const opv = parseInt($('#bgOpacity').value, 10);
+  if (isNaN(opv)) return null;
+  const scrim = parseInt($('#bgScrim').value, 10) || 0;
+  return { image: _bgImage || '', size: size, blur: blur, brightness: brightness, opacity: opv, scrim: scrim };
+}
+
+// 通过 CSS 变量统一注入，避免局部样式冲突；各页面/组件背景表现一致
+function applyAppBackground(cfg) {
+  cfg = cfg || {};
+  const root = document.documentElement;
+  const hasImg = !!cfg.image;
+  root.style.setProperty('--app-bg-image', hasImg ? 'url("' + cfg.image + '")' : 'none');
+  root.style.setProperty('--app-bg-size', cfg.size || 'cover');
+  root.style.setProperty('--app-bg-blur', (cfg.blur != null ? cfg.blur : 0) + 'px');
+  root.style.setProperty('--app-bg-brightness', (cfg.brightness != null ? cfg.brightness : 100) + '%');
+  root.style.setProperty('--app-bg-opacity', ((cfg.opacity != null ? cfg.opacity : 100) / 100));
+  const scrim = cfg.scrim != null ? cfg.scrim : 0;
+  root.style.setProperty('--app-bg-scrim', scrim > 0 ? 'color-mix(in srgb, var(--app-bg-glass) ' + scrim + '%, transparent)' : 'transparent');
+  document.body.classList.toggle('app-bg-on', hasImg);
+}
+
+// 页面加载时应用已保存背景
+function bgApplySaved() {
+  let cfg = bgLoadConfig();
+  if (cfg) {
+    // 旧版「无磨砂 + 粉色调」配置迁移为中性磨砂玻璃默认，去除粉色调
+    if (cfg.image && (!cfg.blur) && (!cfg.scrim)) {
+      cfg.blur = FROST_BLUR;
+      cfg.scrim = FROST_SCRIM;
+      try { localStorage.setItem(BG_KEY, JSON.stringify(cfg)); } catch (e) {}
+    }
+    _bgImage = cfg.image || '';
+    applyAppBackground(cfg);
+  }
+  else { _bgImage = ''; applyAppBackground({}); }
+}
+
+function renderBackgroundSettings() {
+  const cfg = bgLoadConfig() || {};
+  _bgImage = cfg.image || '';
+
+  const size = cfg.size || 'cover';
+  const rCover = document.querySelector('input[name="bgSize"][value="cover"]');
+  const rContain = document.querySelector('input[name="bgSize"][value="contain"]');
+  if (rCover) rCover.checked = (size === 'cover');
+  if (rContain) rContain.checked = (size === 'contain');
+
+  const setS = (id, valId, val, suffix) => {
+    const el = $('#' + id), vel = $('#' + valId);
+    if (el) el.value = val;
+    if (vel) vel.textContent = val + suffix;
+  };
+  setS('bgBlur', 'bgBlurVal', cfg.blur != null ? cfg.blur : 0, 'px');
+  setS('bgBrightness', 'bgBrightVal', cfg.brightness != null ? cfg.brightness : 100, '%');
+  setS('bgOpacity', 'bgOpacityVal', cfg.opacity != null ? cfg.opacity : 100, '%');
+  setS('bgScrim', 'bgScrimVal', cfg.scrim != null ? cfg.scrim : 0, '%');
+
+  const prev = $('#bgPreview'), prevImg = $('#bgPreviewImg');
+  if (prevImg && _bgImage) prevImg.src = _bgImage;
+  if (prev) prev.style.display = _bgImage ? '' : 'none';
+
+  const box = $('#bgUploadBox'), inp = $('#bgUpload');
+  if (box && inp) {
+    box.onclick = () => inp.click();
+    inp.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 8 * 1024 * 1024) { toast('⚠ 图片建议小于 8MB'); inp.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        bgDownscale(ev.target.result, 1920, (dataUrl) => {
+          const wasEmpty = !_bgImage; // 首次导入图片
+          _bgImage = dataUrl;
+          if (wasEmpty) {
+            // 导入即套用磨砂玻璃默认，背景柔和自然且不带粉色调
+            const bEl = $('#bgBlur'); if (bEl) { bEl.value = FROST_BLUR; const bv = $('#bgBlurVal'); if (bv) bv.textContent = FROST_BLUR + 'px'; }
+            const sEl = $('#bgScrim'); if (sEl) { sEl.value = FROST_SCRIM; const sv = $('#bgScrimVal'); if (sv) sv.textContent = FROST_SCRIM + '%'; }
+          }
+          if (prevImg) prevImg.src = dataUrl;
+          if (prev) prev.style.display = '';
+          applyAppBackground(bgCollectFromUI()); // 实时预览
+          toast('✓ 图片已载入，点击「保存背景」生效');
+        });
+      };
+      reader.readAsDataURL(file);
+      inp.value = '';
+    };
+  }
+
+  const bindSlider = (id, valId, suffix) => {
+    const el = $('#' + id);
+    if (!el) return;
+    el.oninput = () => {
+      const vel = $('#' + valId);
+      if (vel) vel.textContent = el.value + suffix;
+      applyAppBackground(bgCollectFromUI()); // 实时预览
+    };
+  };
+  bindSlider('bgBlur', 'bgBlurVal', 'px');
+  bindSlider('bgBrightness', 'bgBrightVal', '%');
+  bindSlider('bgOpacity', 'bgOpacityVal', '%');
+  bindSlider('bgScrim', 'bgScrimVal', '%');
+
+  document.querySelectorAll('input[name="bgSize"]').forEach(r => {
+    r.onchange = () => applyAppBackground(bgCollectFromUI());
+  });
+
+  const applyBtn = $('#bgApplyBtn');
+  if (applyBtn) applyBtn.onclick = () => {
+    const c = bgCollectFromUI();
+    if (!c || !c.image) { toast('⚠ 请先导入一张图片'); return; }
+    try { localStorage.setItem(BG_KEY, JSON.stringify(c)); toast('✓ 背景已保存'); }
+    catch (e) { toast('⚠ 保存失败，图片可能过大'); }
+  };
+
+  const resetBtn = $('#bgResetBtn');
+  if (resetBtn) resetBtn.onclick = () => {
+    if (!_bgImage && !bgLoadConfig()) { toast('当前没有背景'); return; }
+    _bgImage = '';
+    try { localStorage.removeItem(BG_KEY); } catch (e) {}
+    applyAppBackground({});
+    const rc = document.querySelector('input[name="bgSize"][value="cover"]');
+    if (rc) rc.checked = true;
+    const defs = { bgBlur: 0, bgBrightness: 100, bgOpacity: 100, bgScrim: 0 };
+    Object.keys(defs).forEach(id => { const el = $('#' + id); if (el) el.value = defs[id]; });
+    const vmap = { bgBlurVal: '0px', bgBrightVal: '100%', bgOpacityVal: '100%', bgScrimVal: '0%' };
+    Object.keys(vmap).forEach(k => { const vel = $('#' + k); if (vel) vel.textContent = vmap[k]; });
+    if (prev) prev.style.display = 'none';
+    toast('↺ 已恢复默认背景');
+  };
+}
+
+// ============================================
+// 初始化
+// ============================================
+// ============================================
+// 番茄钟 / 专注模块
+// ============================================
  let focusTimerId = null; // setInterval 句柄
 
  // 能量兑换规则：每专注满 2 分钟（120 秒）兑换桌面宠物 1 点能量
@@ -4666,7 +4536,37 @@
  }
  }
  if (!out.position) out.position = '未识别';
+ // —— 增强 tag 抽取：抓"专业技能 / 掌握 / 熟悉 / 了解 / 技能"段里的关键词 ——
+ const skillSection = text.match(/(?:专业技能|技能清单|核心技能|掌握技能|技能)[：:]\s*([\s\S]{0,400}?)(?:\n\s*\n|\n\s*[一二三四五六七八九十0-9]、|\n\s*[一二三四五六七八九十0-9]\.|$)/);
+ if (skillSection) {
+ // 抽取"熟练/掌握/熟悉 X"中的 X（X 限 2-8 字中文或常见技术词）
+ const skillItems = skillSection[1].match(/[、，,;\n；/／]([\u4e00-\u9fa5A-Za-z+#.\-·]{2,12})/g) || [];
+ skillItems.forEach(s => {
+ const k = s.replace(/^[、，,;\n；/／\s]+/, '').trim();
+ if (k && k.length <= 12) tagSet.add(k);
+ });
+ // 也从"熟悉 X / 掌握 X"中抓
+ const verbItems = skillSection[1].match(/(?:熟练|掌握|熟悉|精通|了解)\s*([\u4e00-\u9fa5A-Za-z+#.\-·]{2,12})/g) || [];
+ verbItems.forEach(s => {
+ const k = s.replace(/^(熟练|掌握|熟悉|精通|了解)\s*/, '').trim();
+ if (k && k.length <= 12) tagSet.add(k);
+ });
+ }
+ // 行业兜底：识别"互联网/金融/教育/医疗/电商/游戏/制造业"等
+ const industries = ['互联网','金融','银行','证券','保险','教育','培训','医疗','医院','医药','电商','零售','游戏','制造','汽车','地产','广告','传媒','物流','通信','快消','餐饮','能源','政府','事业单位'];
+ for (const ind of industries) {
+ if (text.includes(ind)) tagSet.add(ind);
+ }
+ // 教育兜底：识别"本科/硕士/博士/大专"
+ const eduTags = ['本科','硕士','博士','大专','MBA'];
+ for (const ed of eduTags) {
+ if (text.includes(ed)) tagSet.add(ed);
+ }
  out.tags = Array.from(tagSet).slice(0, 8);
+ // 兜底：识别失败也给个默认标签，让卡片上的"标签模块"始终可见、提示用户手动补全
+ if (out.tags.length === 0) {
+ out.tags = (text && text.length > 50) ? ['⚠ 待补全'] : ['📋 导入简历'];
+ }
 
  // 期望城市（关键词：期望城市/期望地点/期望工作地/期望工作地点/意向城市/Location/City）
  const cityMatch = text.match(/(?:期望城市|期望地点|期望工作地(?:点)?|意向城市|目标城市|工作地点|期望驻地|Location|Current\s*Location|City)\s*[:：=]?\s*([\u4e00-\u9fa5A-Za-z·\-\s\/,，]{2,30})/);
@@ -5276,9 +5176,16 @@
  const genderIconCls = c.gender === '女' ? 'icon-gender-f' : (c.gender === '男' ? 'icon-gender-m' : '');
  const genderIconEmoji = c.gender === '女' ? '' : (c.gender === '男' ? '' : '');
  const selTags = tpSelectedTags();
- const tagsHtml = (c.tags || []).slice(0, 4).map(t =>
+ const hasTags = Array.isArray(c.tags) && c.tags.length > 0;
+ const tagsHtml = hasTags
+ ? c.tags.slice(0, 4).map(t =>
  `<span class="talent-mini-tag${selTags.includes(t) ? ' matched' : ''}">${highlight(t)}</span>`
- ).join('');
+ ).join('')
+ : '';
+ // 没标签时显示"＋ 添加"占位（点击直接进入编辑）
+ const tagsBlock = hasTags
+ ? `<div class="talent-card-tags">${tagsHtml}</div>`
+ : `<div class="talent-card-tags empty"><span class="talent-tags-empty-tip">暂未添加标签</span><button class="talent-mini-tag talent-mini-tag-add" data-talent-action="edit" data-id="${escapeAttr(c.id)}" title="点击添加标签">＋ 添加标签</button></div>`;
  const picked = _tpSelectedIds.has(c.id);
  const pickHtml = _tpBulkMode
  ? `<span class="talent-pick" data-id="${escapeAttr(c.id)}" title="选中/取消">${picked ? '☑' : '☐'}</span>`
@@ -5326,7 +5233,7 @@
  <span class="talent-contact-value">${highlight(c.email || '— 未识别')}</span>
  </div>
  </div>
- ${tagsHtml ? `<div class="talent-card-tags">${tagsHtml}</div>` : ''}
+ ${tagsBlock}
  <div class="talent-card-foot">
  <span class="talent-source-badge ${c.source === 'manual' ? 'manual' : 'import'}">${c.source === 'manual' ? '✍ 手动' : '📥 导入'}</span>
  <span class="talent-date">${(c.addedAt || '').slice(0, 16)}</span>
@@ -5465,9 +5372,11 @@
  }
  }
  saveData();
- renderTalentPool();
- toast(` 已导入 ${added} 份${dup ? ` · 跳过重复 ${dup}` : ''}${fail ? ` · 失败 ${fail}` : ''}`);
- // 只要有任何一份没识别好，就弹诊断报告，明确告诉用户"识别不了什么、为什么"
+ saveData();
+renderTalentPool();
+toast(` 已导入 ${added} 份${dup ? ` · 跳过重复 ${dup}` : ''}${fail ? ` · 失败 ${fail}` : ''}`);
+if (added > 0) awardEnergy('talent_import', { count: added });
+// 只要有任何一份没识别好，就弹诊断报告，明确告诉用户"识别不了什么、为什么"
  if (report.some(r => r.status !== 'ok')) openTalentDiagnosisModal(report);
  }
 
@@ -5626,13 +5535,14 @@
  fileType: '',
  fileSize: 0,
  fileId: '',
- rawText: '',
- addedAt: getDateStr(new Date()) + ' ' + new Date().toTimeString().slice(0, 5),
- });
- }
- saveData();
- $('#modalRoot').innerHTML = '';
- renderTalentPool();
+rawText: '',
+addedAt: getDateStr(new Date()) + ' ' + new Date().toTimeString().slice(0, 5),
+});
+awardEnergy('talent_add');
+}
+saveData();
+$('#modalRoot').innerHTML = '';
+renderTalentPool();
  toast(isEdit ? '✓ 已保存（原简历文件保留）' : '✓ 已加入人才库');
  };
  }
@@ -5705,10 +5615,14 @@
  catch (e) { console.warn('[人才库] 原简历文件清理失败：', r.fileId, e); }
  }
  }
- set.forEach(id => _tpSelectedIds.delete(id));
- saveData();
- renderTalentPool();
- return removed.length;
+set.forEach(id => _tpSelectedIds.delete(id));
+var _imp = removed.filter(c => c && c.source === 'import').length;
+var _man = removed.length - _imp;
+if (_imp) awardEnergy('talent_import', { count: _imp, reverse: true });
+if (_man) awardEnergy('talent_add', { reverse: true });
+saveData();
+renderTalentPool();
+return removed.length;
  }
 
  // 单个删除 —— 自定义二次确认
@@ -6161,6 +6075,7 @@ const NAV_ICON_BASE64 = {
   'c4edea873c74b43f5d2aefaca17d2190.png': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAAEDSURBVGje7ZjRDcMgDESTIbpPhwgM0SU6BUNAh+gUHaelGHBiCJXy25zvo6qV55+T4ZCnSaVSnUcXU3VNxczFAkynzzaQPBGp85YrV5ohafrss2WWiNrJzYj0zFBWaiv2hUeMn72JKHS1T9Le3GOMbyqVTm4+I3lXpkrplX7x/6B0Gaxy7/CQKW04oo5N1TnpLaIE7daeLqgQ6DaiGuX8dlYGFQrd2dfTzWFTGp622y0s7yBkmn7lkbOVM8g0+yVHKoDTOif7lBqdNMdtWHR6zXTJvS+btw8GvZo1DKrBe/D8dNlLbq9/Kc+7SzRarmu7Y/ZzrwlAD5uXgyt/DFqlUv2JvrOceqxGWe6sAAAAAElFTkSuQmCC',
   'd97bb7cb32ce65846faf77921bfee12a.png': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAlQTFRFTGlx////AAAAztsTbQAAAAF0Uk5TAEDm2GYAAADTSURBVGje7ZjLEcMgDEShiPRDEYQi0o+LcKo0IHksfs453t2DZyQ9XTTIAjlHUdRz9HqrQjb8aURgOofTt2gvRM78VGuTZEi6hPdaslQI/YozQtL+CguhmWdagKSvcEdXk7StJmnSS7oVadL9iFrQzaBCoH3fWr2aQYVC35RvOFikSZMm/Ysef0Dt2wCXtjnGA0irS9YK9jCJZzrTnk3n28xicuvTMUebuw8GXYs177SkOyk0WvaSsoaz2pa7GQDarmvHTovTvSYAvc4PjjRFUf+kA2JZqRWlbiymAAAAAElFTkSuQmCC',
   'e22f0c10d68698c28c4b6ac95ab13915.png': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0AgMAAABAo+6hAAAAAXNSR0IArs4c6QAAAAxQTFRFTGlx////AAAA5N/fcYeliAAAAAF0Uk5TAEDm2GYAAADrSURBVGje7ZjdFcMgCIXjEN0nQ0S7g0t0ig6h+3ScnlbxJ4q6gJf7kBPk48WDghyHSCTaRw+ddQZDFeMCpoPb+CgXiRBpyXqnYEg6uh1tmYlE/qbFC5JWtzsRObKEnZD07WY0mUK3uym00Eu6l9BC8xK1oLtChUArfrS4ukKFQrPte321fv4+88SCpIljAbC0pb6/cvHH0MMAmNblDqoB7Tos3V1D/dsAlE451LwYU55h0tlXY8pMIefZtKbtTYduZkwmttL1Phh0k0BjK+Mn/eD+dJpLWj+TK7NLNLod1w5azDUBaJFIJNpFf8Tl509kYET/AAAAAElFTkSuQmCC',
+  'ai.png': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3QgeD0iNiIgeT0iOCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE2IiByeD0iNSIgZmlsbD0iI2UyNmQ5YSIvPjxjaXJjbGUgY3g9IjEzIiBjeT0iMTYiIHI9IjIuMiIgZmlsbD0iI2ZmZiIvPjxjaXJjbGUgY3g9IjE5IiBjeT0iMTYiIHI9IjIuMiIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjE0LjUiIHk9IjMiIHdpZHRoPSIzIiBoZWlnaHQ9IjUiIHJ4PSIxLjUiIGZpbGw9IiNlMjZkOWEiLz48Y2lyY2xlIGN4PSIxNiIgY3k9IjIuNiIgcj0iMiIgZmlsbD0iI2ZmZDhhOCIvPjwvc3ZnPg==',
 };
 
  function init() {
@@ -6179,6 +6094,9 @@ const NAV_ICON_BASE64 = {
 
  // 主题切换
  setupThemeUI();
+
+ // 主题背景（应用已保存的本地图片背景）
+ bgApplySaved();
 
  // 侧边栏 + 抽屉分栏图标（沿用原三丽鸥图标样式）
  const allNav = [...$$('.nav-item'), ...$$('.drawer-nav-item')];
@@ -6199,6 +6117,16 @@ const NAV_ICON_BASE64 = {
  const navDrawerClose = $('#navDrawerClose');
  if (navDrawerClose) navDrawerClose.onclick = closeNavDrawer;
 
+ // 桌面「今日时间线」：添加按钮 + 数据变更自动刷新
+ const desktopAddBtn = document.getElementById('desktopAddEvent');
+ if (desktopAddBtn) desktopAddBtn.onclick = function () {
+   if (window.ScheduleAPI) window.ScheduleAPI.addEvent(getDateStr(new Date()), null);
+ };
+ window.addEventListener('schedule-changed', function () {
+   var dash = document.getElementById('view-dashboard');
+   if (dash && dash.classList.contains('active')) renderDesktopTimeline();
+ });
+
  // 番茄钟模块初始化（事件绑定 + 恢复进行中的计时）
  initFocus();
 
@@ -6206,7 +6134,7 @@ const NAV_ICON_BASE64 = {
  $('#fabBtn').onclick = () => {
  const viewName = $('.view.active').id.replace('view-', '');
  const actions = {
- schedule: () => $('#addEventBtn').click(),
+ schedule: () => { if (window.ScheduleAPI && window.ScheduleAPI.open) window.ScheduleAPI.open(); else { var b = $('#addEventBtn'); if (b) b.click(); } },
  diary: () => $('#diaryCheckinBtn').click(),
  reading: () => $('#logReadingBtn').click(),
  portfolio: () => $('#addPortfolioBtn').click(),
@@ -6227,8 +6155,6 @@ const NAV_ICON_BASE64 = {
  });
  $$('.view').forEach(v => observer.observe(v, { attributes: true, attributeFilter: ['class'] }));
 
- // 添加任务按钮（今日要做）
- $('#addTaskBtn').onclick = () => openTaskModal(null);
 
  // 启动边牧宠物（QQ 宠物式自由走动），只启动一次
  if (!window.__petStarted) {
