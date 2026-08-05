@@ -2116,7 +2116,6 @@ async function syncPush() {
   var payload = { room: currentRoom, data: JSON.stringify(state), updated_at: new Date().toISOString() };
   var res = await supabaseClient.from('sync_rooms').upsert(payload, { onConflict: 'room' });
   if (res.error) throw res.error;
-  if (window.toast) window.toast('☁ 已同步到云端');
 }
 
 async function syncPullAndReload() {
@@ -2125,6 +2124,7 @@ async function syncPullAndReload() {
   if (res.error) { console.warn('[sync] 拉取失败：', res.error); return; }
   if (res.data && res.data.data) {
     try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
+    try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
     location.reload();
   }
 }
@@ -2141,13 +2141,68 @@ function syncSetRoom(room) {
 // 上传：把【本机】数据保存到云端（覆盖云端）。数据最全的那台设备用。
 async function syncUpload() {
   if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
-  await syncPush();
+  await syncPush(); // 文字数据
+  try {
+    var n = await syncPushResumeFiles(); // 简历原文件
+    if (window.toast) window.toast('☁ 已保存到云端（含 ' + n + ' 份简历原文件）');
+  } catch (e) {
+    console.warn('[sync] 简历原文件上传失败', e);
+    if (window.toast) window.toast('⚠️ 文字已同步，简历原文件上传失败：' + (e.message || e));
+  }
 }
 
 // 下载：把【云端】数据拉到本机（覆盖本机）。新设备 / 想恢复数据时用。
 async function syncDownload() {
   if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
   await syncPullAndReload();
+}
+
+// 把本机 IndexedDB 里的简历原文件上传到云端独立表（避免单包过大传失败）
+async function syncPushResumeFiles() {
+  if (!supabaseClient || !currentRoom) return 0;
+  let all = null;
+  try { all = await TALENT_IDB.getAllFiles(); }
+  catch (e) { console.warn('[sync] 读取简历原文件失败', e); return 0; }
+  if (all === null) return 0; // 读取失败，不触碰云端
+  const ids = Object.keys(all);
+  if (ids.length === 0) {
+    // 本机无简历文件：清空云端该 room 的旧文件，保持镜像一致
+    await supabaseClient.from('sync_resume_files').delete().eq('room', currentRoom);
+    return 0;
+  }
+  const rows = [];
+  const skipped = [];
+  for (const id of ids) {
+    const f = all[id];
+    if (f && f.size && f.size > 8 * 1024 * 1024) { skipped.push(f.name || id); continue; }
+    try {
+      const dataUrl = await blobToBase64(f);
+      rows.push({ room: currentRoom, file_id: String(id), name: f.name || '', mime: f.type || '', data: dataUrl, updated_at: new Date().toISOString() });
+    } catch (e) { console.warn('[sync] 简历文件编码失败', id, e); }
+  }
+  if (rows.length) {
+    const res = await supabaseClient.from('sync_resume_files').upsert(rows, { onConflict: 'room,file_id' });
+    if (res.error) throw res.error;
+  }
+  if (skipped.length && window.toast) window.toast('⚠️ 跳过 ' + skipped.length + ' 个过大文件(>8MB)：' + skipped.join('、'));
+  return rows.length;
+}
+
+// 把云端简历原文件下载并写回本机 IndexedDB
+async function syncDownloadResumeFiles() {
+  if (!supabaseClient || !currentRoom) return 0;
+  const res = await supabaseClient.from('sync_resume_files').select('file_id,name,mime,data').eq('room', currentRoom);
+  if (res.error) { console.warn('[sync] 下载简历原文件失败', res.error); return 0; }
+  if (!res.data || !res.data.length) return 0;
+  let n = 0;
+  for (const row of res.data) {
+    try {
+      const blob = dataUrlToBlob(row.data);
+      await TALENT_IDB.putFile(row.file_id, blob);
+      n++;
+    } catch (e) { console.warn('[sync] 简历文件还原失败', row.file_id, e); }
+  }
+  return n;
 }
 
 // 退出同步：仅本机清除房间码，云端数据保留
@@ -2171,6 +2226,7 @@ async function syncPullIfNewer() {
   var local = localStorage.getItem(STORAGE_KEY);
   if (local && local === res.data.data) return;
   try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
+  try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
   if (window.toast) window.toast('☁ 已从云端同步最新数据');
   location.reload();
 }
@@ -4500,19 +4556,59 @@ function renderBackgroundSettings() {
  req.onerror = () => reject(req.error);
  });
  },
- async deleteFile(id) {
- if (!id) return;
- const db = await this._open();
- return new Promise((resolve, reject) => {
- const tx = db.transaction(this.store, 'readwrite');
- tx.objectStore(this.store).delete(id);
- tx.oncomplete = () => resolve();
- tx.onerror = () => reject(tx.error);
- });
- },
- };
+  async deleteFile(id) {
+    if (!id) return;
+    const db = await this._open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.store, 'readwrite');
+      tx.objectStore(this.store).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  // 读取全部简历原文件：{ fileId: File/Blob }
+  async getAllFiles() {
+    const db = await this._open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.store, 'readonly');
+      const store = tx.objectStore(this.store);
+      const valsReq = store.getAll();
+      const keysReq = store.getAllKeys();
+      let vals = [], keys = [];
+      valsReq.onsuccess = () => { vals = valsReq.result; };
+      keysReq.onsuccess = () => { keys = keysReq.result; };
+      tx.oncomplete = () => {
+        const map = {};
+        for (let i = 0; i < keys.length; i++) {
+          if (vals[i]) map[String(keys[i])] = vals[i];
+        }
+        resolve(map);
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+};
 
- // 全局弹窗助手：用事件委托接管 mask/close/cancel 关闭逻辑
+// 简历原文件 ↔ base64（用于云同步打包进云端）
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+function dataUrlToBlob(dataUrl) {
+  const [meta, b64] = String(dataUrl).split(',');
+  const m = meta.match(/data:([^;]+);base64/);
+  const mime = m ? m[1] : '';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+// 全局弹窗助手：用事件委托接管 mask/close/cancel 关闭逻辑
  // 解决 onclick="$('#modalRoot')..." 字符串中 $ 找不到 window 引用的问题
  function openModal(html) {
  const root = $('#modalRoot');
