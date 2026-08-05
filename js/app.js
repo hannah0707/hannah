@@ -2129,13 +2129,24 @@ async function syncPullAndReload() {
   }
 }
 
-// 设置同步码：保存后先上传本机数据，再拉取云端（以云端为准覆盖本机）
-async function syncSetRoom(room) {
+// 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
+function syncSetRoom(room) {
   room = (room || '').trim();
   if (room.length < 3) throw new Error('同步码至少 3 位');
   currentRoom = room;
   try { localStorage.setItem(SYNC_ROOM_KEY, room); } catch (e) {}
+  updateSyncUI();
+}
+
+// 上传：把【本机】数据保存到云端（覆盖云端）。数据最全的那台设备用。
+async function syncUpload() {
+  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
   await syncPush();
+}
+
+// 下载：把【云端】数据拉到本机（覆盖本机）。新设备 / 想恢复数据时用。
+async function syncDownload() {
+  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
   await syncPullAndReload();
 }
 
@@ -2188,12 +2199,23 @@ async function initSync() {
   if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
   var closeBtn = document.getElementById('syncCloseBtn');
   if (closeBtn) closeBtn.addEventListener('click', function () { if (modal) modal.style.display = 'none'; });
-  var saveBtn = document.getElementById('syncSaveBtn');
-  if (saveBtn) saveBtn.addEventListener('click', async function () {
+  var downloadBtn = document.getElementById('syncDownloadBtn');
+  if (downloadBtn) downloadBtn.addEventListener('click', async function () {
     var input = document.getElementById('syncRoom');
     try {
-      await syncSetRoom(input.value);
-      if (window.toast) window.toast('✅ 同步成功！另一台设备输入相同同步码即可互传');
+      await syncSetRoom(input.value); // 先记下同步码
+      await syncDownload();           // 再从云端拉到本机
+      if (window.toast) window.toast('✅ 已从云端下载，本机数据已更新');
+      if (modal) modal.style.display = 'none';
+    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
+  });
+  var uploadBtn = document.getElementById('syncUploadBtn');
+  if (uploadBtn) uploadBtn.addEventListener('click', async function () {
+    var input = document.getElementById('syncRoom');
+    try {
+      await syncSetRoom(input.value); // 先记下同步码
+      await syncUpload();             // 再把本机保存到云端
+      if (window.toast) window.toast('✅ 已保存到云端，其他设备输入相同同步码即可下载');
       if (modal) modal.style.display = 'none';
     } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
   });
@@ -2206,6 +2228,8 @@ async function initSync() {
 
 // 暴露给全局（供其他模块 / 调试）
 window.syncSetRoom = syncSetRoom;
+window.syncUpload = syncUpload;
+window.syncDownload = syncDownload;
 window.syncClearRoom = syncClearRoom;
 window.syncStatus = function () { return currentRoom || null; };
 
