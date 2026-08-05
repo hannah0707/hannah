@@ -109,8 +109,9 @@
  <span class="icon">📡</span>
  <span class="icon">🔋</span>
  <button class="btn btn-sm" id="globalQuickNoteBtn" title="随手速记">✏️ 速记</button>
- <button class="btn btn-sm" id="globalBackupBtn" title="数据备份与恢复">💾 备份</button>
- <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="打开分栏导航菜单" title="分栏导航">☰</button>
+<button class="btn btn-sm" id="globalBackupBtn" title="数据备份与恢复">💾 备份</button>
+<button class="btn btn-sm" id="globalSyncBtn" title="跨设备云同步">☁ 同步</button>
+<button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="打开分栏导航菜单" title="分栏导航">☰</button>
  </div>
  </div>
 
@@ -821,8 +822,28 @@
  <!-- 浮动按钮 -->
  <button class="fab" id="fabBtn" style="display: none;">+</button>
 
- <!-- 模态框容器 -->
- <div id="modalRoot"></div>
+<!-- 模态框容器 -->
+<div id="modalRoot"></div>
+
+<!-- 跨设备同步 · 登录弹窗 -->
+<div id="syncModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.45); align-items:center; justify-content:center; font-family:inherit;">
+  <div style="position:relative; background:#fff; border-radius:16px; padding:24px; width:min(92vw,360px); box-shadow:0 12px 40px rgba(0,0,0,.25);">
+    <h3 style="margin:0 0 4px; font-size:18px;">☁ 跨设备同步</h3>
+    <p id="syncStatus" style="margin:0 0 14px; font-size:13px; color:#888;">未登录</p>
+    <input id="syncEmail" type="email" placeholder="邮箱" autocomplete="email" style="width:100%; box-sizing:border-box; padding:10px 12px; margin-bottom:10px; border:1px solid #ddd; border-radius:10px; font-size:14px;">
+    <input id="syncPwd" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" style="width:100%; box-sizing:border-box; padding:10px 12px; margin-bottom:14px; border:1px solid #ddd; border-radius:10px; font-size:14px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="syncLoginBtn" style="flex:1; min-width:88px; padding:10px; border:none; border-radius:10px; background:#ff7eb6; color:#fff; font-size:14px; cursor:pointer;">登录</button>
+      <button id="syncSignupBtn" style="flex:1; min-width:88px; padding:10px; border:none; border-radius:10px; background:#7ec8ff; color:#fff; font-size:14px; cursor:pointer;">注册</button>
+      <button id="syncLogoutBtn" style="flex:1; min-width:88px; padding:10px; border:none; border-radius:10px; background:#eee; color:#555; font-size:14px; cursor:pointer;">登出</button>
+    </div>
+    <p style="margin:14px 0 0; font-size:12px; color:#999; line-height:1.6;">
+      登录后，日记 / 打卡 / 心情 / 宠物等数据会自动云同步，换设备登录同一账号即可恢复。<br>
+      ⚠️ 简历原文件仅保存在本机，不参与云同步。
+    </p>
+    <button id="syncCloseBtn" style="position:absolute; top:10px; right:14px; border:none; background:none; font-size:22px; line-height:1; color:#bbb; cursor:pointer;">×</button>
+  </div>
+</div>
 
  <!-- 🐶 自由走动的桌面宠物（QQ 宠物式：随机走动、随机活动、可点击对话、可拖拽） -->
  <div class="desktop-pet" id="desktopPet" aria-label="桌面小狗">
@@ -849,7 +870,9 @@
  <div class="theme-cards" id="themeCardsPopover"></div>
  </div>
 
- <script src="js/data.js?v=20260804"></script>
+ <!-- Supabase 客户端（跨设备云同步，需先于 app.js 加载） -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/data.js?v=20260804"></script>
  <script src="js/api.js?v=20260804"></script>
  <!-- 今日书单推荐：书籍预置数据 + 推荐逻辑（纯前端） -->
  <script src="js/books.js?v=20260804"></script>

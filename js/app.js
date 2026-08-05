@@ -14,6 +14,25 @@
  // 数据存储
  // ============================================
  const STORAGE_KEY = 'pixel_workbench_v3';
+
+// ---- 跨设备同步配置（Supabase）----
+// 把下面的两个值替换成你自己的 Supabase 项目值（详见 SUPABASE_SETUP.md）
+const SYNC_SUPABASE_URL = 'https://yjmkmkbixsnuxvpmjgnz.supabase.co';       // 例：https://xxxx.supabase.co
+const SYNC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqbWtta2JpeHNudXh2cG1qZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4Nzg2MjMsImV4cCI6MjEwMTQ1NDYyM30.MP4sDRmBSXoZ-cYn4tmIaxOi52DE6MgL7ZZblNwA0jw';  // Project Settings → API → anon public key
+const SYNC_ENABLED = !!(SYNC_SUPABASE_URL && SYNC_SUPABASE_URL.indexOf('http') === 0);
+
+// 同步运行时状态（在 saveData 之前声明，避免 TDZ）
+let supabaseClient = null;
+let currentUser = null;
+let _pushTimer = null;
+if (SYNC_ENABLED && typeof window.supabase !== 'undefined') {
+  try {
+    supabaseClient = window.supabase.createClient(SYNC_SUPABASE_URL, SYNC_SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.warn('[sync] supabase 初始化失败：', e);
+    supabaseClient = null;
+  }
+}
  const defaultData = {
  nickname: 'Hannah',
  city: '',
@@ -167,13 +186,17 @@
  }
  }
 
- function saveData() {
- try {
- localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
- } catch (e) {
- console.error('Save data error:', e);
- }
- }
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Save data error:', e);
+  }
+  // 跨设备同步：已登录则防抖上传到云端
+  if (SYNC_ENABLED && supabaseClient && currentUser) {
+    schedulePush();
+  }
+}
 
  let state = loadData();
 
@@ -2073,6 +2096,149 @@ window.getDateStr = getDateStr;
 window.awardEnergy = awardEnergy;
 window.updateMascotStats = updateMascotStats;
 window.INTERACTION_RULES = INTERACTION_RULES;
+
+// ============================================================
+// 跨设备同步（Supabase）
+// 已登录时把整个 state 存到云端 user_state 表；未配置/未登录时纯 localStorage，零回归。
+// ============================================================
+function schedulePush() {
+  if (_pushTimer) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(function () {
+    syncPush().catch(function (err) { console.warn('[sync] push 失败：', err); });
+  }, 800);
+}
+
+async function syncPush() {
+  if (!supabaseClient || !currentUser) return;
+  var payload = { user_id: currentUser.id, data: state };
+  var res = await supabaseClient.from('user_state').upsert(payload, { onConflict: 'user_id' });
+  if (res.error) throw res.error;
+  if (window.toast) window.toast('☁ 已同步到云端');
+}
+
+async function syncPullAndReload() {
+  if (!supabaseClient || !currentUser) return;
+  var res = await supabaseClient.from('user_state').select('data').eq('user_id', currentUser.id).maybeSingle();
+  if (res.error) { console.warn('[sync] pull 失败：', res.error); return; }
+  if (res.data && res.data.data) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.data)); } catch (e) {}
+    location.reload();
+  }
+}
+
+async function syncLogin(email, password) {
+  if (!supabaseClient) throw new Error('同步未配置');
+  var res = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+  if (res.error) throw res.error;
+  currentUser = res.data.user;
+  updateSyncUI();
+  await syncPullAndReload(); // 拉取云端最新并刷新
+}
+
+async function syncSignup(email, password) {
+  if (!supabaseClient) throw new Error('同步未配置');
+  var res = await supabaseClient.auth.signUp({ email: email, password: password });
+  if (res.error) throw res.error;
+  if (res.data.user) {
+    currentUser = res.data.user;
+    updateSyncUI();
+    await syncPush().catch(function () {}); // 新账号：把当前本机数据推上云端
+    if (window.toast) window.toast('✅ 注册成功，已同步当前数据');
+  }
+  if (res.data.session === null) {
+    if (window.toast) window.toast('📧 已发送确认邮件，请先验证邮箱再登录');
+  }
+}
+
+async function syncLogout() {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  updateSyncUI();
+  if (window.toast) window.toast('已退出云同步（本机数据保留）');
+}
+
+function updateSyncUI() {
+  var statusEl = document.getElementById('syncStatus');
+  if (statusEl) statusEl.textContent = currentUser ? ('已登录：' + (currentUser.email || currentUser.id)) : '未登录';
+  var btn = document.getElementById('globalSyncBtn');
+  if (btn) btn.textContent = currentUser ? '☁ 已同步' : '☁ 同步';
+}
+
+async function syncPullIfNewer() {
+  if (!supabaseClient || !currentUser) return;
+  var res = await supabaseClient.from('user_state').select('data, updated_at').eq('user_id', currentUser.id).maybeSingle();
+  if (res.error || !res.data || !res.data.data) return;
+  var local = localStorage.getItem(STORAGE_KEY);
+  if (local && local === JSON.stringify(res.data.data)) return; // 相同，不刷新
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.data)); } catch (e) {}
+  if (window.toast) window.toast('☁ 已从云端同步最新数据');
+  location.reload();
+}
+
+async function initSync() {
+  if (!supabaseClient) return;
+  supabaseClient.auth.onAuthStateChange(function (event, session) {
+    currentUser = session ? session.user : null;
+    updateSyncUI();
+  });
+  var sess = await supabaseClient.auth.getSession();
+  if (sess.data && sess.data.session) {
+    currentUser = sess.data.session.user;
+    updateSyncUI();
+    // 延迟静默拉取，避免打断首屏；远程更新才刷新
+    setTimeout(function () {
+      syncPullIfNewer().catch(function (err) { console.warn('[sync] 启动拉取失败：', err); });
+    }, 1500);
+  }
+}
+
+// UI 绑定（弹窗 + 按钮）
+(function bindSyncUI() {
+  var modal = document.getElementById('syncModal');
+  var openBtn = document.getElementById('globalSyncBtn');
+  if (openBtn) openBtn.addEventListener('click', function () {
+    if (modal) modal.style.display = 'flex';
+    updateSyncUI();
+  });
+  if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
+  var closeBtn = document.getElementById('syncCloseBtn');
+  if (closeBtn) closeBtn.addEventListener('click', function () { if (modal) modal.style.display = 'none'; });
+  var loginBtn = document.getElementById('syncLoginBtn');
+  if (loginBtn) loginBtn.addEventListener('click', async function () {
+    var email = document.getElementById('syncEmail').value.trim();
+    var pwd = document.getElementById('syncPwd').value;
+    try {
+      await syncLogin(email, pwd);
+      if (window.toast) window.toast('✅ 登录成功，正在同步…');
+      if (modal) modal.style.display = 'none';
+    } catch (e) { if (window.toast) window.toast('❌ 登录失败：' + (e.message || e)); }
+  });
+  var signupBtn = document.getElementById('syncSignupBtn');
+  if (signupBtn) signupBtn.addEventListener('click', async function () {
+    var email = document.getElementById('syncEmail').value.trim();
+    var pwd = document.getElementById('syncPwd').value;
+    if (pwd.length < 6) { if (window.toast) window.toast('密码至少 6 位'); return; }
+    try {
+      await syncSignup(email, pwd);
+      if (modal) modal.style.display = 'none';
+    } catch (e) { if (window.toast) window.toast('❌ 注册失败：' + (e.message || e)); }
+  });
+  var logoutBtn = document.getElementById('syncLogoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', async function () {
+    await syncLogout();
+    if (modal) modal.style.display = 'none';
+  });
+})();
+
+// 暴露给全局（供其他模块 / 调试）
+window.syncLogin = syncLogin;
+window.syncSignup = syncSignup;
+window.syncLogout = syncLogout;
+window.syncStatus = function () { return currentUser ? currentUser.email : null; };
+
+// 启动同步（恢复 session + 已登录静默拉取）
+initSync();
 
  // 一次性迁移：为已存在的书补齐默认状态
  function migrateReadingStatus() {
