@@ -23,8 +23,10 @@ const SYNC_ENABLED = !!(SYNC_SUPABASE_URL && SYNC_SUPABASE_URL.indexOf('http') =
 
 // 同步运行时状态（在 saveData 之前声明，避免 TDZ）
 let supabaseClient = null;
-let currentUser = null;
+let currentRoom = '';
 let _pushTimer = null;
+const SYNC_ROOM_KEY = 'pixel_sync_room';
+try { currentRoom = localStorage.getItem(SYNC_ROOM_KEY) || ''; } catch (e) {}
 if (SYNC_ENABLED && typeof window.supabase !== 'undefined') {
   try {
     supabaseClient = window.supabase.createClient(SYNC_SUPABASE_URL, SYNC_SUPABASE_ANON_KEY);
@@ -192,8 +194,8 @@ function saveData() {
   } catch (e) {
     console.error('Save data error:', e);
   }
-  // 跨设备同步：已登录则防抖上传到云端
-  if (SYNC_ENABLED && supabaseClient && currentUser) {
+  // 跨设备同步：已设同步码则防抖上传到云端
+  if (SYNC_ENABLED && supabaseClient && currentRoom) {
     schedulePush();
   }
 }
@@ -2098,95 +2100,75 @@ window.updateMascotStats = updateMascotStats;
 window.INTERACTION_RULES = INTERACTION_RULES;
 
 // ============================================================
-// 跨设备同步（Supabase）
-// 已登录时把整个 state 存到云端 user_state 表；未配置/未登录时纯 localStorage，零回归。
+// 跨设备同步（Supabase · 共享同步码方案）
+// 免注册 / 免邮箱：两台设备输入【同一个同步码】即可互传数据。
+// 数据存 sync_rooms 表，room = 同步码，data = localStorage 的完整 JSON 字符串。
 // ============================================================
 function schedulePush() {
   if (_pushTimer) clearTimeout(_pushTimer);
   _pushTimer = setTimeout(function () {
-    syncPush().catch(function (err) { console.warn('[sync] push 失败：', err); });
+    syncPush().catch(function (err) { console.warn('[sync] 上传失败：', err); });
   }, 800);
 }
 
 async function syncPush() {
-  if (!supabaseClient || !currentUser) return;
-  var payload = { user_id: currentUser.id, data: state };
-  var res = await supabaseClient.from('user_state').upsert(payload, { onConflict: 'user_id' });
+  if (!supabaseClient || !currentRoom) return;
+  var payload = { room: currentRoom, data: JSON.stringify(state), updated_at: new Date().toISOString() };
+  var res = await supabaseClient.from('sync_rooms').upsert(payload, { onConflict: 'room' });
   if (res.error) throw res.error;
   if (window.toast) window.toast('☁ 已同步到云端');
 }
 
 async function syncPullAndReload() {
-  if (!supabaseClient || !currentUser) return;
-  var res = await supabaseClient.from('user_state').select('data').eq('user_id', currentUser.id).maybeSingle();
-  if (res.error) { console.warn('[sync] pull 失败：', res.error); return; }
+  if (!supabaseClient || !currentRoom) return;
+  var res = await supabaseClient.from('sync_rooms').select('data').eq('room', currentRoom).maybeSingle();
+  if (res.error) { console.warn('[sync] 拉取失败：', res.error); return; }
   if (res.data && res.data.data) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.data)); } catch (e) {}
+    try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
     location.reload();
   }
 }
 
-async function syncLogin(email, password) {
-  if (!supabaseClient) throw new Error('同步未配置');
-  var res = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
-  if (res.error) throw res.error;
-  currentUser = res.data.user;
-  updateSyncUI();
-  await syncPullAndReload(); // 拉取云端最新并刷新
+// 设置同步码：保存后先上传本机数据，再拉取云端（以云端为准覆盖本机）
+async function syncSetRoom(room) {
+  room = (room || '').trim();
+  if (room.length < 3) throw new Error('同步码至少 3 位');
+  currentRoom = room;
+  try { localStorage.setItem(SYNC_ROOM_KEY, room); } catch (e) {}
+  await syncPush();
+  await syncPullAndReload();
 }
 
-async function syncSignup(email, password) {
-  if (!supabaseClient) throw new Error('同步未配置');
-  var res = await supabaseClient.auth.signUp({ email: email, password: password });
-  if (res.error) throw res.error;
-  if (res.data.user) {
-    currentUser = res.data.user;
-    updateSyncUI();
-    await syncPush().catch(function () {}); // 新账号：把当前本机数据推上云端
-    if (window.toast) window.toast('✅ 注册成功，已同步当前数据');
-  }
-  if (res.data.session === null) {
-    if (window.toast) window.toast('📧 已发送确认邮件，请先验证邮箱再登录');
-  }
-}
-
-async function syncLogout() {
-  if (!supabaseClient) return;
-  await supabaseClient.auth.signOut();
-  currentUser = null;
-  updateSyncUI();
+// 退出同步：仅本机清除房间码，云端数据保留
+function syncClearRoom() {
+  currentRoom = '';
+  try { localStorage.removeItem(SYNC_ROOM_KEY); } catch (e) {}
   if (window.toast) window.toast('已退出云同步（本机数据保留）');
 }
 
 function updateSyncUI() {
   var statusEl = document.getElementById('syncStatus');
-  if (statusEl) statusEl.textContent = currentUser ? ('已登录：' + (currentUser.email || currentUser.id)) : '未登录';
+  if (statusEl) statusEl.textContent = currentRoom ? ('同步码：' + currentRoom) : '未设置同步码';
   var btn = document.getElementById('globalSyncBtn');
-  if (btn) btn.textContent = currentUser ? '☁ 已同步' : '☁ 同步';
+  if (btn) btn.textContent = currentRoom ? '☁ 已同步' : '☁ 同步';
 }
 
 async function syncPullIfNewer() {
-  if (!supabaseClient || !currentUser) return;
-  var res = await supabaseClient.from('user_state').select('data, updated_at').eq('user_id', currentUser.id).maybeSingle();
+  if (!supabaseClient || !currentRoom) return;
+  var res = await supabaseClient.from('sync_rooms').select('data, updated_at').eq('room', currentRoom).maybeSingle();
   if (res.error || !res.data || !res.data.data) return;
   var local = localStorage.getItem(STORAGE_KEY);
-  if (local && local === JSON.stringify(res.data.data)) return; // 相同，不刷新
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.data)); } catch (e) {}
+  if (local && local === res.data.data) return;
+  try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
   if (window.toast) window.toast('☁ 已从云端同步最新数据');
   location.reload();
 }
 
 async function initSync() {
   if (!supabaseClient) return;
-  supabaseClient.auth.onAuthStateChange(function (event, session) {
-    currentUser = session ? session.user : null;
-    updateSyncUI();
-  });
-  var sess = await supabaseClient.auth.getSession();
-  if (sess.data && sess.data.session) {
-    currentUser = sess.data.session.user;
-    updateSyncUI();
-    // 延迟静默拉取，避免打断首屏；远程更新才刷新
+  updateSyncUI();
+  if (currentRoom) {
+    // 已设过码：延迟静默拉取，远程有更新才刷新
     setTimeout(function () {
       syncPullIfNewer().catch(function (err) { console.warn('[sync] 启动拉取失败：', err); });
     }, 1500);
@@ -2200,44 +2182,34 @@ async function initSync() {
   if (openBtn) openBtn.addEventListener('click', function () {
     if (modal) modal.style.display = 'flex';
     updateSyncUI();
+    var input = document.getElementById('syncRoom');
+    if (input && currentRoom) input.value = currentRoom;
   });
   if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
   var closeBtn = document.getElementById('syncCloseBtn');
   if (closeBtn) closeBtn.addEventListener('click', function () { if (modal) modal.style.display = 'none'; });
-  var loginBtn = document.getElementById('syncLoginBtn');
-  if (loginBtn) loginBtn.addEventListener('click', async function () {
-    var email = document.getElementById('syncEmail').value.trim();
-    var pwd = document.getElementById('syncPwd').value;
+  var saveBtn = document.getElementById('syncSaveBtn');
+  if (saveBtn) saveBtn.addEventListener('click', async function () {
+    var input = document.getElementById('syncRoom');
     try {
-      await syncLogin(email, pwd);
-      if (window.toast) window.toast('✅ 登录成功，正在同步…');
+      await syncSetRoom(input.value);
+      if (window.toast) window.toast('✅ 同步成功！另一台设备输入相同同步码即可互传');
       if (modal) modal.style.display = 'none';
-    } catch (e) { if (window.toast) window.toast('❌ 登录失败：' + (e.message || e)); }
+    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
   });
-  var signupBtn = document.getElementById('syncSignupBtn');
-  if (signupBtn) signupBtn.addEventListener('click', async function () {
-    var email = document.getElementById('syncEmail').value.trim();
-    var pwd = document.getElementById('syncPwd').value;
-    if (pwd.length < 6) { if (window.toast) window.toast('密码至少 6 位'); return; }
-    try {
-      await syncSignup(email, pwd);
-      if (modal) modal.style.display = 'none';
-    } catch (e) { if (window.toast) window.toast('❌ 注册失败：' + (e.message || e)); }
-  });
-  var logoutBtn = document.getElementById('syncLogoutBtn');
-  if (logoutBtn) logoutBtn.addEventListener('click', async function () {
-    await syncLogout();
+  var clearBtn = document.getElementById('syncClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    syncClearRoom();
     if (modal) modal.style.display = 'none';
   });
 })();
 
 // 暴露给全局（供其他模块 / 调试）
-window.syncLogin = syncLogin;
-window.syncSignup = syncSignup;
-window.syncLogout = syncLogout;
-window.syncStatus = function () { return currentUser ? currentUser.email : null; };
+window.syncSetRoom = syncSetRoom;
+window.syncClearRoom = syncClearRoom;
+window.syncStatus = function () { return currentRoom || null; };
 
-// 启动同步（恢复 session + 已登录静默拉取）
+// 启动同步（已设码则静默拉取）
 initSync();
 
  // 一次性迁移：为已存在的书补齐默认状态
