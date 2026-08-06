@@ -122,7 +122,7 @@
         data.isUser = true;
         data.createdAt = new Date().toISOString();
         arr.unshift(data);
-        if (window.awardEnergy) window.awardEnergy('inspiration_add');
+        if (window.awardEnergy) window.awardEnergy('inspiration_add', { summary: (data.summary || '').slice(0, 40) });
         if (window.toast) window.toast('✓ 已添加灵感');
       }
       save(arr);

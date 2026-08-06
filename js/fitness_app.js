@@ -323,7 +323,7 @@
     arr.push(rec);
     setRecords(arr);
     markCheckin(rec.date);
-    if (window.awardEnergy) window.awardEnergy('fitness');
+    if (window.awardEnergy) window.awardEnergy('fitness', { name: plan.title });
     return rec;
   }
 

@@ -378,9 +378,20 @@ return hit;
   function renderFinanceModule() {
     var root = document.getElementById('finRoot');
     if (!root) return;
-    root.innerHTML = summaryCards() + barCard() + pieCard() + listCard() + budgetCard() + tplCard() + reviewCard();
+    root.innerHTML = entryCard() + summaryCards() + barCard() + pieCard() + listCard() + budgetCard() + tplCard() + reviewCard();
     bindEvents(root);
     bindTips(root);
+  }
+
+  /* ---- 8.0 快速记账入口（置顶，方便一键记收入/支出） ---- */
+  function entryCard() {
+    return '<div class="card fin-card fin-quick-card">'
+      + '<div class="fin-card-head"><div class="card-title fin-title">✨ 快速记账</div>'
+      + '<div class="fin-head-btns">'
+      + '<button class="btn" id="finCatMgrBtn">🏷 分类管理</button>'
+      + '<button class="btn" id="addIncomeBtn">+ 收入</button>'
+      + '<button class="btn primary" id="addExpenseBtn">+ 支出</button>'
+      + '</div></div></div>';
   }
 
   /* ---- 8.1 顶部收支卡片（本月收入 / 本月支出 / 本月结余 / 今日收支 / 本周结余） ---- */
@@ -614,12 +625,7 @@ return hit;
       }).join('');
 
     return '<div class="card fin-card">'
-      + '<div class="fin-card-head"><div class="card-title fin-title">🧾 账目明细</div>'
-      + '<div class="fin-head-btns">'
-      + '<button class="btn" id="finCatMgrBtn">🏷 分类管理</button>'
-      + '<button class="btn" id="addIncomeBtn">+ 收入</button>'
-      + '<button class="btn primary" id="addExpenseBtn">+ 支出</button>'
-      + '</div></div>'
+      + '<div class="fin-card-head"><div class="card-title fin-title">🧾 账目明细</div></div>'
       + '<div class="fin-filter-bar">' + rangeSel + customRange + typeSel + catSel
       + '<input class="fin-input search" id="finFKw" placeholder="🔍 搜索名称/备注/标签" value="' + FN.esc(f.kw) + '">'
       + '<button class="btn sm" id="finFReset">重置</button></div>'
@@ -927,7 +933,7 @@ return hit;
             toast('✓ 已保存修改');
 } else {
 addRecordRaw({ type: state.type, category: category, name: name, amount: amount, date: date, note: note, tags: tags, createdAt: Date.now() });
-window.awardEnergy('finance');
+window.awardEnergy('finance', { amount: amount, type: state.type, category: category, note: note, name: name });
 toast('✓ 已记一笔');
 }
           closeModal();
@@ -1094,7 +1100,7 @@ addRecordRaw({
 type: t.type, category: t.category, name: t.name, amount: Number(t.amount),
 date: today(), note: t.note || '', tags: (t.tags || []).slice(), createdAt: Date.now()
 });
-window.awardEnergy('finance');
+window.awardEnergy('finance', { amount: Number(t.amount), type: t.type, category: t.category, note: t.note, name: t.name });
 renderFinanceModule();
 refreshFitnessCard();
 toast('⚡ 已按模板记一笔：' + t.name);

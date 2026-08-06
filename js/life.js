@@ -672,7 +672,7 @@
         }
         break;
       case 'pick-eat':
-        if (id) { Takeout.recordEat(id); if (window.awardEnergy) window.awardEnergy('takeout_eat'); toast('✓ 已记录吃过「' + (Takeout.getById(id).name) + '」'); }
+        if (id) { Takeout.recordEat(id); if (window.awardEnergy) window.awardEnergy('takeout_eat', { name: Takeout.getById(id).name }); toast('✓ 已记录吃过「' + (Takeout.getById(id).name) + '」'); }
         closeModal();
         if (LIFE_TAB === 'takeout') renderLife();
         break;
@@ -683,7 +683,7 @@
         if (id) openActions(id);
         break;
       case 'eat-today':
-        if (id) { Takeout.recordEat(id); if (window.awardEnergy) window.awardEnergy('takeout_eat'); toast('✓ 标记今天吃了'); closeModal(); if (LIFE_TAB === 'takeout') renderLife(); }
+        if (id) { Takeout.recordEat(id); if (window.awardEnergy) window.awardEnergy('takeout_eat', { name: Takeout.getById(id).name }); toast('✓ 标记今天吃了'); closeModal(); if (LIFE_TAB === 'takeout') renderLife(); }
         break;
       case 'edit':
         if (id) { var it = Takeout.getById(id); closeModal(); openTakeoutForm(it); }
@@ -698,7 +698,7 @@
       // —— 喝水 ——
       case 'add-water':
         var amt = parseInt(actionEl.getAttribute('data-amt'), 10);
-        if (amt > 0) { Water.addRecord(amt); if (window.awardEnergy) window.awardEnergy('water'); renderLife(); }
+        if (amt > 0) { Water.addRecord(amt); if (window.awardEnergy) window.awardEnergy('water', { amount: amt }); renderLife(); }
         break;
       case 'undo-water':
         if (Water.undoLast()) { if (window.awardEnergy) window.awardEnergy('water', { reverse: true }); renderLife(); } else { toast('今天还没有记录可撤销'); }
@@ -722,7 +722,7 @@
         recipeCurrentId = null; renderLife();
         break;
       case 'rcook':
-        if (id) { Recipe.recordCook(id); if (window.awardEnergy) window.awardEnergy('recipe_cook'); toast('✓ 打卡「' + (Recipe.getById(id).name) + '」'); renderLife(); }
+        if (id) { Recipe.recordCook(id); if (window.awardEnergy) window.awardEnergy('recipe_cook', { name: Recipe.getById(id).name }); toast('✓ 打卡「' + (Recipe.getById(id).name) + '」'); renderLife(); }
         break;
       case 'radd':
         openRecipeForm(null);

@@ -14,14 +14,10 @@
  // 数据存储
  // ============================================
  const STORAGE_KEY = 'pixel_workbench_v3';
-
-// ---- 跨设备同步配置（Supabase）----
-// 把下面的两个值替换成你自己的 Supabase 项目值（详见 SUPABASE_SETUP.md）
-const SYNC_SUPABASE_URL = 'https://yjmkmkbixsnuxvpmjgnz.supabase.co';       // 例：https://xxxx.supabase.co
-const SYNC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqbWtta2JpeHNudXh2cG1qZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4Nzg2MjMsImV4cCI6MjEwMTQ1NDYyM30.MP4sDRmBSXoZ-cYn4tmIaxOi52DE6MgL7ZZblNwA0jw';  // Project Settings → API → anon public key
+// ---- 跨设备同步配置（Supabase · 共享同步码方案）----
+const SYNC_SUPABASE_URL = 'https://yjmkmkbixsnuxvpmjgnz.supabase.co';
+const SYNC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqbWtta2JpeHNudXh2cG1qZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4Nzg2MjMsImV4cCI6MjEwMTQ1NDYyM30.MP4sDRmBSXoZ-cYn4tmIaxOi52DE6MgL7ZZblNwA0jw';
 const SYNC_ENABLED = !!(SYNC_SUPABASE_URL && SYNC_SUPABASE_URL.indexOf('http') === 0);
-
-// 同步运行时状态（在 saveData 之前声明，避免 TDZ）
 let supabaseClient = null;
 let currentRoom = '';
 let _pushTimer = null;
@@ -30,17 +26,14 @@ try { currentRoom = localStorage.getItem(SYNC_ROOM_KEY) || ''; } catch (e) {}
 if (SYNC_ENABLED && typeof window.supabase !== 'undefined') {
   try {
     supabaseClient = window.supabase.createClient(SYNC_SUPABASE_URL, SYNC_SUPABASE_ANON_KEY);
-  } catch (e) {
-    console.warn('[sync] supabase 初始化失败：', e);
-    supabaseClient = null;
-  }
+  } catch (e) { console.warn('[sync] supabase 初始化失败：', e); supabaseClient = null; }
 }
- const defaultData = {
+const defaultData = {
  nickname: 'Hannah',
  city: '',
  settings: { dailyGoal: 6 },
 
- mascot: { id: 'av_0a0950', energy: 0 },
+ mascot: { id: 'av_0a0950', energy: 30 }, // ⚡ 初始能量给 30，避免一上来宠物就“饿死”
  avatar: 'av_0a0950', // 当前选中的像素头像 ID
  customAvatar: null, // 自定义上传头像 (base64)
 
@@ -188,17 +181,17 @@ if (SYNC_ENABLED && typeof window.supabase !== 'undefined') {
  }
  }
 
-function saveData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Save data error:', e);
-  }
-  // 跨设备同步：已设同步码则防抖上传到云端
-  if (SYNC_ENABLED && supabaseClient && currentRoom) {
-    schedulePush();
-  }
-}
+ function saveData() {
+ try {
+ localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+ } catch (e) {
+ console.error('Save data error:', e);
+ }
+ // 跨设备同步：已设同步码则防抖上传到云端
+ if (SYNC_ENABLED && supabaseClient && currentRoom) {
+ schedulePush();
+ }
+ }
 
  let state = loadData();
 
@@ -447,12 +440,10 @@ function renderScheduleBridge() {
    var box = document.getElementById('desktopTimeline');
    if (!box) return;
    var today = getDateStr(new Date());
+
+   // 1) 今日日程事件（原生，可勾选）
    var events = (window.state && window.state.schedule && window.state.schedule.events[today]) || [];
    events = events.slice().sort(function (a, b) { return (a.startTime || '').localeCompare(b.startTime || ''); });
-   if (events.length === 0) {
-     box.innerHTML = '<div class="dt-empty">🌿 今天还没有安排，点「＋ 添加日程」规划一下吧～</div>';
-     return;
-   }
    var now = new Date();
    var curMin = now.getHours() * 60 + now.getMinutes();
    var activeIdx = -1;
@@ -462,34 +453,86 @@ function renderScheduleBridge() {
      var m = (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
      if (m <= curMin) activeIdx = i; else break;
    }
-   box.innerHTML = events.map(function (e, idx) {
-     var color = catColorFor(e.category);
-     var done = e.done ? ' done' : '';
-     var cur = idx === activeIdx ? ' current' : '';
-     return '<div class="dt-item' + done + cur + '" data-evid="' + dtEsc(e.id || '') + '">' +
-       '<div class="dt-track"><div class="dt-dot"></div></div>' +
-       '<div class="dt-time">' + dtEsc(e.startTime || '') + '</div>' +
-       '<button class="dt-check" data-act="toggle" title="标记完成 / 取消完成" aria-label="标记完成">' + (e.done ? '☑' : '☐') + '</button>' +
-       '<div class="dt-main">' +
-         '<div class="dt-title">' + dtEsc(e.title || '（未命名）') + '</div>' +
-       '</div>' +
-       '<span class="dt-cat" style="--c:' + color + '">' + dtEsc(e.category || '其他') + '</span>' +
-     '</div>';
+   var schedItems = events.map(function (e, idx) {
+     return { kind: 'schedule', time: e.startTime || '00:00', ev: e, sidx: idx };
+   });
+
+   // 2) 今日跨模块动态（来自 pixel_workbench_timeline）
+   var acts = loadTimeline().filter(function (x) { return x.date === today; });
+   acts.sort(function (a, b) { return a.ts - b.ts; });
+   var actItems = acts.map(function (x) {
+     var d = new Date(x.ts);
+     var hh = String(d.getHours()).padStart(2, '0');
+     var mm = String(d.getMinutes()).padStart(2, '0');
+     return { kind: 'activity', time: hh + ':' + mm, entry: x };
+   });
+
+   // 3) 合并按时间排序
+   var items = schedItems.concat(actItems).sort(function (a, b) {
+     return toMin(a.time) - toMin(b.time);
+   });
+
+   if (items.length === 0) {
+     box.innerHTML = '<div class="dt-empty">🌿 今天还没有安排，点「＋ 添加日程」规划一下吧～</div>';
+     return;
+   }
+
+   box.innerHTML = items.map(function (it) {
+     if (it.kind === 'schedule') {
+       var e = it.ev;
+       var color = catColorFor(e.category);
+       var done = e.done ? ' done' : '';
+       var cur = (it.sidx === activeIdx) ? ' current' : '';
+       return '<div class="dt-item' + done + cur + '" data-evid="' + dtEsc(e.id || '') + '">' +
+         '<div class="dt-track"><div class="dt-dot"></div></div>' +
+         '<div class="dt-time">' + dtEsc(e.startTime || '') + '</div>' +
+         '<button class="dt-check" data-act="toggle" title="标记完成 / 取消完成" aria-label="标记完成">' + (e.done ? '☑' : '☐') + '</button>' +
+         '<div class="dt-main"><div class="dt-title">' + dtEsc(e.title || '（未命名）') + '</div></div>' +
+         '<span class="dt-cat" style="--c:' + color + '">' + dtEsc(e.category || '其他') + '</span>' +
+       '</div>';
+     }
+    // 跨模块动态条目（具体文案：标题/副标题均来自操作细节）
+    var x = it.entry;
+    var meta = TIMELINE_TYPE_MAP[x.type] || { module: '动态', icon: '📌', color: '#B8B8C8', view: 'dashboard' };
+    var titleTxt = x.title || meta.module;
+    var subTxt = x.reverse ? '撤回了上面的操作' : (x.sub || '');
+    var prefix = x.reverse ? '↩ 撤销：' : '';
+    return '<div class="dt-item dt-act' + (x.reverse ? ' rev' : '') + '" data-view="' + dtEsc(meta.view || '') + '">' +
+      '<div class="dt-track"><div class="dt-dot dt-dot-act"></div></div>' +
+      '<div class="dt-time">' + dtEsc(it.time) + '</div>' +
+      '<div class="dt-icon">' + meta.icon + '</div>' +
+      '<div class="dt-main">' +
+        '<div class="dt-title">' + dtEsc(prefix + titleTxt) + '</div>' +
+        (subTxt ? ('<div class="dt-sub">' + dtEsc(subTxt) + '</div>') : '') +
+      '</div>' +
+      '<span class="dt-cat" style="--c:' + meta.color + '">' + dtEsc(meta.module) + '</span>' +
+    '</div>';
    }).join('');
+
+   // 事件绑定
    Array.prototype.forEach.call(box.querySelectorAll('.dt-item'), function (el) {
      el.addEventListener('click', function (evt) {
-       // 点勾选框：直接切换完成，不打开编辑弹窗
+       // 跨模块动态条目：点击跳回对应分栏
+       if (el.classList.contains('dt-act')) {
+         var v = el.dataset.view;
+         if (v && typeof switchView === 'function' && document.getElementById('view-' + v)) switchView(v);
+         return;
+       }
+       // 日程项：点勾选框切完成；点其他区域打开编辑
        if (evt.target.closest('.dt-check')) {
          var tid = el.dataset.evid;
          if (window.ScheduleAPI && window.ScheduleAPI.toggleDone) window.ScheduleAPI.toggleDone(tid);
          return;
        }
-       // 点其他区域：打开编辑弹窗
        var id = el.dataset.evid;
-       var ev = (window.state.schedule.events[today] || []).find(function (x) { return x.id === id; });
+       var ev = (window.state.schedule.events[today] || []).find(function (xx) { return xx.id === id; });
        if (ev && window.ScheduleAPI) window.ScheduleAPI.addEvent(today, ev);
      });
    });
+ }
+ function toMin(t) {
+   var p = String(t || '00:00').split(':');
+   return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
  }
 
 
@@ -502,13 +545,13 @@ function renderScheduleBridge() {
 
  // 互动动作：消耗能量，提升健康/心情
  var MASCOT_ACTIONS = [
- { id: 'pet', icon: '', name: '摸摸', cost: 5,
+ { id: 'pet', icon: '', name: '摸摸', cost: 2,
  dialogues: ['汪～好舒服～再摸一会儿嘛！', '咕噜咕噜～你最暖啦～', '尾巴摇到要飞起来啦！', '鼻子蹭蹭你的手～', '我喜欢被摸耳朵！'] },
- { id: 'feed', icon: '🦴', name: '喂零食', cost: 10,
+ { id: 'feed', icon: '🦴', name: '喂零食', cost: 4,
  dialogues: ['哇！肉干！我最爱的！', '嚼嚼嚼～谢谢你～', '骨头归我啦！', '我还能再吃十根！', '嘴巴还在嚼别跟我说话~'] },
- { id: 'play', icon: '', name: '丢球玩', cost: 15,
+ { id: 'play', icon: '', name: '丢球玩', cost: 6,
  dialogues: ['汪汪！球球球球！', '冲冲冲！去捡回来啦！', '我抓到啦！', '再来一次！', '球呢？球跑哪去啦？'] },
- { id: 'walk', icon: '', name: '出去遛', cost: 20,
+ { id: 'walk', icon: '', name: '出去遛', cost: 8,
  dialogues: ['耶耶耶！出门啦！', '走走走！', '外面的鸟最可爱了！', '草的味道太香啦！', '我跑得比风还快～'] },
  { id: 'sleep', icon: '', name: '睡觉', cost: 0,
  dialogues: ['呼……ZZZ…', '梦到骨头了…zzz', '耳朵还在听你打字哦…', '别走太远…zzz', '梦里也在摇尾巴…'] },
@@ -561,12 +604,19 @@ function renderScheduleBridge() {
  // 不同交互行为 → 不同数值变化：能量(energy)/健康(health)/心情(mood)/积分(points)
  // 助手互动消耗能量、提升健康或心情；学习活动正向加成；任务打卡按优先级分配积分。
  // ============================================
+// ⚡ 能量平衡优化参数（让用户更容易攒能量、宠物互动更轻松）
+var ENERGY_GAIN_MULT = 2.5;     // 正向行为获得能量 ×2.5
+var ENERGY_MAX = 200;           // 能量上限，防止溢出
+var ENERGY_REGEN_PER_TICK = 2;  // 被动回复：每 ENERGY_REGEN_MS 自动 +2
+var ENERGY_REGEN_MS = 30000;    // 每 30 秒回复一次（即使不操作也会慢慢回血）
 var INTERACTION_RULES = {
 // 桌面助手互动（消耗能量，提升健康/心情）
-pet: { energy: -5, health: 0, mood: +3, label: '抚摸助手' },
-feed: { energy: -10, health: +4, mood: +2, label: '喂食助手' },
-play: { energy: -15, health: +2, mood: +3, label: '陪玩助手' },
-talk: { energy: -20, health: 0, mood: +5, label: '与助手对话' },
+// 桌面助手互动（消耗能量，提升健康/心情）—— 已下调消耗，宠物更“好养”
+pet: { energy: -2, health: 0, mood: +3, label: '抚摸助手' },
+feed: { energy: -4, health: +4, mood: +2, label: '喂食助手' },
+play: { energy: -6, health: +2, mood: +3, label: '陪玩助手' },
+talk: { energy: -8, health: 0, mood: +5, label: '与助手对话' },
+walk: { energy: -8, health: +3, mood: +4, label: '出去遛' },
 
 
 // 学习活动（完成即加成，对应不同数值侧重）
@@ -611,18 +661,23 @@ var rule = INTERACTION_RULES[type];
 if (!rule) return null;
 var sign = opts.reverse ? -1 : 1;
 var mult = (typeof opts.count === 'number' && opts.count > 0) ? opts.count : 1;
-var dE = (rule.energy || 0) * sign * mult;
+// 正向获取 ×倍率（只放大“获得”，不放大“消耗”），取整保持能量为整数
+var rawE = (rule.energy || 0);
+if (rawE > 0) rawE = rawE * ENERGY_GAIN_MULT;
+var dE = Math.round(rawE * sign * mult);
 var dH = (rule.health || 0) * sign * mult;
 var dM = (rule.mood   || 0) * sign * mult;
 var dP = (rule.points || 0) * sign * mult;
 
 var m = state.mascot;
-m.energy = Math.max(0, (m.energy || 0) + dE);
+m.energy = Math.max(0, Math.min(ENERGY_MAX, (m.energy || 0) + dE));
 m.health = clamp((m.health == null ? 70 : m.health) + dH, 0, 100);
 m.mood   = clamp((m.mood   == null ? 70 : m.mood)   + dM, 0, 100);
 state.points = (state.points || 0) + dP;
-saveData();
-updateMascotStats();
+  saveData();
+  updateMascotStats();
+  // 同步到「桌面今日时间线」：每个跨模块操作都记录一条动态（不影响能量结算）
+  try { logTimelineActivity(type, opts); } catch (e) { /* 吞噬异常，保证能量逻辑稳定 */ }
 
 // 反馈文案（silent 不弹；notify:false 也不弹，供旧调用保留自身文案）
 var notify = opts.notify !== false;
@@ -638,9 +693,122 @@ if (!opts.silent && notify && dE !== 0) {
 return { rule: rule, summary: (dE > 0 ? '+' : '') + dE + '能量' };
 }
 
-// 兼容旧调用：applyInteraction(type, reverse) —— 不自动弹 toast，沿用调用方自己的文案
-function applyInteraction(type, reverse) {
-return awardEnergy(type, { reverse: !!reverse, notify: false });
+ // 兼容旧调用：applyInteraction(type, reverse) —— 不自动弹 toast，沿用调用方自己的文案
+ function applyInteraction(type, reverse) {
+ return awardEnergy(type, { reverse: !!reverse, notify: false });
+ }
+
+ // ============================================
+ // 📌 桌面「今日时间线」跨模块动态采集
+ // 通过 awardEnergy 这一全局动作枢纽自动采集：任意分栏的增/改/删操作都会
+ // 写入独立存储 pixel_workbench_timeline，由 renderDesktopTimeline 合并渲染。
+ // 未含 schedule_* 类型（日程事件已在时间线以原生条目展示，避免重复）。
+ // ============================================
+function _petName() {
+  var el = document.getElementById('currentMascotName');
+  return (el && el.textContent) || '旺仔';
+}
+var TIMELINE_TYPE_MAP = {
+  finance:         { module: '记账',   icon: '💰', view: 'finance',     color: '#FF9FB6',
+    make: function (o) { o = o || {}; if (o.reverse && o.amount == null) return { title: '撤销了一笔记账', sub: '' }; var inc = (o.type === 'income' || o.type === '收入'); var kind = inc ? '收入' : '支出'; var sign = inc ? '+' : '-'; var t = (o.amount != null ? ('记了一笔' + kind + ' ' + sign + '¥' + o.amount) : ('记了一笔' + kind)); return { title: t, sub: o.note || o.category || o.name || '' }; } },
+  water:           { module: '饮水',   icon: '💧', view: 'life',        color: '#7FC8F0',
+    make: function (o) { o = o || {}; return { title: '喝了 ' + (o.amount || '一杯') + 'ml 水', sub: '补充水分，身体更轻盈' }; } },
+  period:          { module: '经期',   icon: '🩸', view: 'life',        color: '#FF8FA3',
+    make: function () { return { title: '记录了今天来例假', sub: '身体关怀 🌸' }; } },
+  takeout_eat:     { module: '外卖',   icon: '🍔', view: 'life',        color: '#FFC36B',
+    make: function (o) { o = o || {}; return { title: '吃了「' + (o.name || '外卖') + '」', sub: '外卖打卡' }; } },
+  recipe_cook:     { module: '菜谱',   icon: '🍳', view: 'life',        color: '#FFC36B',
+    make: function (o) { o = o || {}; return { title: '打卡了菜谱「' + (o.name || '菜谱') + '」', sub: '下厨做饭 🍳' }; } },
+  fitness:         { module: '健身',   icon: '💪', view: 'fitness',     color: '#7FE0B0',
+    make: function (o) { o = o || {}; return { title: '完成了' + (o.name || '一次') + '训练', sub: o.sub || '运动打卡 💪' }; } },
+  fitness_plan:    { module: '健身计划', icon: '🗓️', view: 'fitness',  color: '#7FE0B0',
+    make: function (o) { o = o || {}; return { title: '制定了训练计划', sub: o.count ? (o.count + ' 项计划') : '规划今日训练' }; } },
+  fitness_body:    { module: '身体数据', icon: '📏', view: 'fitness',     color: '#7FE0B0',
+    make: function (o) { o = o || {}; return { title: '记录了一项身体数据', sub: o.sub || '关注身体变化' }; } },
+  fitness_video:   { module: '跟练',   icon: '🎬', view: 'fitness',     color: '#7FE0B0',
+    make: function (o) { o = o || {}; return { title: '收藏了健身视频', sub: o.title || '跟练打卡' }; } },
+  fitness_exercise:{ module: '训练',   icon: '🏋️', view: 'fitness',    color: '#7FE0B0',
+    make: function (o) { o = o || {}; return { title: '新增了自定义动作', sub: o.name || '自定义训练库' }; } },
+  book_add:        { module: '书架',   icon: '📚', view: 'reading',     color: '#C3A6F0',
+    make: function (o) { o = o || {}; return { title: '往书架加了《' + (o.title || '新书') + '》', sub: o.author || '阅读计划 +1' }; } },
+  book_review:     { module: '书评',   icon: '✍️', view: 'reading',     color: '#C3A6F0',
+    make: function (o) { o = o || {}; return { title: '写了一篇书评', sub: o.title ? ('《' + o.title + '》') : '分享读书感悟' }; } },
+  diary:           { module: '日记',   icon: '📝', view: 'diary',       color: '#FF9FB6',
+    make: function (o) { o = o || {}; return { title: '记了一篇日记', sub: o.summary ? ('「' + o.summary + '」') : '记录今日心情与随笔' }; } },
+  english_word:    { module: '单词',   icon: '🔤', view: 'english',     color: '#9AD0C2',
+    make: function (o) { o = o || {}; return { title: '背了一个单词', sub: o.word || '每日积累' }; } },
+  inspiration_add: { module: '灵感',   icon: '💡', view: 'inspiration', color: '#FFD56B',
+    make: function (o) { o = o || {}; return { title: '记了一条灵感', sub: o.summary || (o.text ? ('「' + o.text + '」') : '捕捉闪现的念头') }; } },
+  vision_fav:      { module: '破茧收藏', icon: '⭐', view: 'vision',    color: '#D6A6F0',
+    make: function (o) { o = o || {}; return { title: '收藏了一篇资讯', sub: o.title || '视野拓展' }; } },
+  vision_read:     { module: '破茧阅读', icon: '📖', view: 'vision',     color: '#D6A6F0',
+    make: function (o) { o = o || {}; return { title: '读了一篇资讯', sub: o.title || '破茧成蝶' }; } },
+  portfolio_add:   { module: '作品集', icon: '🎨', view: 'portfolio',   color: '#9AD0F0',
+    make: function (o) { o = o || {}; return { title: '添加了一个作品', sub: o.title || '创作记录 +1' }; } },
+  ai_chat:         { module: 'AI 助手', icon: '🤖', view: 'ai',         color: '#A6B8F0',
+    make: function () { return { title: '和 AI 助手聊了会儿', sub: '智能问答 · 灵感碰撞' }; } },
+  talent_add:      { module: '人才库',   icon: '🌟', view: 'talent-pool',  color: '#FFC36B',
+    make: function () { return { title: '新增了一个人才', sub: '人才库 +1' }; } },
+  talent_import:   { module: '人才导入', icon: '📥', view: 'talent-pool',  color: '#FFC36B',
+    make: function (o) { o = o || {}; return { title: '导入了 ' + (o.count || '') + ' 个人才', sub: '批量入库' }; } },
+  pet:            { module: '抚摸旺仔', icon: '🐾', view: 'dashboard', color: '#B8E0FF',
+    make: function () { return { title: '抚摸了' + _petName(), sub: '陪伴毛孩子' }; } },
+  feed:           { module: '喂食旺仔', icon: '🦴', view: 'dashboard', color: '#FFD8A8',
+    make: function () { return { title: '喂了' + _petName() + '零食', sub: '投喂时间' }; } },
+  play:           { module: '陪玩旺仔', icon: '🎾', view: 'dashboard', color: '#A8E6CF',
+    make: function () { return { title: '陪' + _petName() + '玩了会儿', sub: '丢球嬉戏' }; } },
+  talk:           { module: '和旺仔聊天', icon: '💬', view: 'dashboard', color: '#FFC36B',
+    make: function () { return { title: '和' + _petName() + '聊了会儿', sub: '汪汪对话' }; } },
+  read:           { module: '阅读',   icon: '📖', view: 'reading',     color: '#A0D8F0',
+    make: function (o) { o = o || {}; return { title: '读了' + (o.title ? ('《' + o.title + '》') : '一会儿书'), sub: o.pages ? (o.pages + ' 页') : '沉浸阅读' }; } },
+  write:          { module: '写作',   icon: '✍️', view: 'writing',     color: '#C9B6F0',
+    make: function (o) { o = o || {}; return { title: '写了' + (o.words ? (o.words + ' 字') : '一会儿'), sub: '笔耕不辍' }; } },
+  english:        { module: '学英语', icon: '🔤', view: 'english',     color: '#9AD0C2',
+    make: function () { return { title: '学了一会儿英语', sub: '每日坚持' }; } }
+};
+ var TIMELINE_KEY = 'pixel_workbench_timeline';
+ function loadTimeline() {
+   try { return JSON.parse(localStorage.getItem(TIMELINE_KEY)) || []; } catch (e) { return []; }
+ }
+ function saveTimeline(arr) {
+   try { localStorage.setItem(TIMELINE_KEY, JSON.stringify(arr)); } catch (e) {}
+ }
+ // 记录一条跨模块动态（在 awardEnergy 内被调用）
+// 根据类型 + 操作细节，生成具体文案（标题 + 副标题摘要）
+function buildTimelineText(type, opts) {
+  opts = opts || {};
+  var meta = TIMELINE_TYPE_MAP[type];
+  if (meta && typeof meta.make === 'function') {
+    var t = meta.make(opts);
+    return { title: (t && t.title) || (meta.module || '动态'), sub: (t && t.sub) || '' };
+  }
+  // 兜底：用交互规则的中文 label
+  var rule = (typeof INTERACTION_RULES !== 'undefined') ? INTERACTION_RULES[type] : null;
+  if (rule && rule.label) return { title: '完成了一次' + rule.label, sub: '' };
+  return { title: '完成了一项操作', sub: '' };
+}
+function logTimelineActivity(type, opts) {
+  opts = opts || {};
+  if (type && type.indexOf('schedule_') === 0) return; // 日程由原生条目展示
+  var meta = TIMELINE_TYPE_MAP[type] || {
+    module: (typeof INTERACTION_RULES !== 'undefined' && INTERACTION_RULES[type] && INTERACTION_RULES[type].label) || '动态',
+    icon: '📌', view: 'dashboard', color: '#B8B8C8'
+  };
+  var txt = buildTimelineText(type, opts);
+  var entry = {
+    ts: Date.now(),
+    date: getDateStr(new Date()),
+    type: type,
+    reverse: !!opts.reverse,
+    count: (typeof opts.count === 'number' && opts.count > 0) ? opts.count : 1,
+    title: txt.title,
+    sub: txt.sub
+  };
+  var arr = loadTimeline();
+  arr.push(entry);
+  if (arr.length > 400) arr = arr.slice(arr.length - 400); // 控制体积
+  saveTimeline(arr);
+  if (window.dispatchEvent) window.dispatchEvent(new Event('timeline-changed'));
 }
 
  // 同步桌面助手的 能量/健康/心情 三枚徽章显示
@@ -1269,7 +1437,8 @@ return awardEnergy(type, { reverse: !!reverse, notify: false });
  state.checkin.diary[today] = !state.checkin.diary[today];
  saveData();
 if (state.checkin.diary[today]) {
-var r = applyInteraction('diary');
+var diarySummary = liveText.trim().slice(0, 30);
+var r = awardEnergy('diary', { summary: diarySummary, notify: false });
 updateMascotStats();
 toast('✓ 打卡成功！' + (r ? r.summary : ''));
 } else {
@@ -2097,200 +2266,9 @@ window.getDateStr = getDateStr;
 // 暴露统一能量结算与桌面助手状态刷新，供各功能模块（健身/理财/日程/生活/视野/AI 等）接入"任何行为都给能量"
 window.awardEnergy = awardEnergy;
 window.updateMascotStats = updateMascotStats;
+// 暴露桌面「今日时间线」合并渲染，供测试与其他模块按需刷新
+window.renderDesktopTimeline = renderDesktopTimeline;
 window.INTERACTION_RULES = INTERACTION_RULES;
-
-// ============================================================
-// 跨设备同步（Supabase · 共享同步码方案）
-// 免注册 / 免邮箱：两台设备输入【同一个同步码】即可互传数据。
-// 数据存 sync_rooms 表，room = 同步码，data = localStorage 的完整 JSON 字符串。
-// ============================================================
-function schedulePush() {
-  if (_pushTimer) clearTimeout(_pushTimer);
-  _pushTimer = setTimeout(function () {
-    syncPush().catch(function (err) { console.warn('[sync] 上传失败：', err); });
-  }, 800);
-}
-
-async function syncPush() {
-  if (!supabaseClient || !currentRoom) return;
-  var payload = { room: currentRoom, data: JSON.stringify(state), updated_at: new Date().toISOString() };
-  var res = await supabaseClient.from('sync_rooms').upsert(payload, { onConflict: 'room' });
-  if (res.error) throw res.error;
-}
-
-async function syncPullAndReload() {
-  if (!supabaseClient || !currentRoom) return;
-  var res = await supabaseClient.from('sync_rooms').select('data').eq('room', currentRoom).maybeSingle();
-  if (res.error) { console.warn('[sync] 拉取失败：', res.error); return; }
-  if (res.data && res.data.data) {
-    try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
-    try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
-    location.reload();
-  }
-}
-
-// 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
-function syncSetRoom(room) {
-  room = (room || '').trim();
-  if (room.length < 3) throw new Error('同步码至少 3 位');
-  currentRoom = room;
-  try { localStorage.setItem(SYNC_ROOM_KEY, room); } catch (e) {}
-  updateSyncUI();
-}
-
-// 上传：把【本机】数据保存到云端（覆盖云端）。数据最全的那台设备用。
-async function syncUpload() {
-  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
-  await syncPush(); // 文字数据
-  try {
-    var n = await syncPushResumeFiles(); // 简历原文件
-    if (window.toast) window.toast('☁ 已保存到云端（含 ' + n + ' 份简历原文件）');
-  } catch (e) {
-    console.warn('[sync] 简历原文件上传失败', e);
-    if (window.toast) window.toast('⚠️ 文字已同步，简历原文件上传失败：' + (e.message || e));
-  }
-}
-
-// 下载：把【云端】数据拉到本机（覆盖本机）。新设备 / 想恢复数据时用。
-async function syncDownload() {
-  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
-  await syncPullAndReload();
-}
-
-// 把本机 IndexedDB 里的简历原文件上传到云端独立表（避免单包过大传失败）
-async function syncPushResumeFiles() {
-  if (!supabaseClient || !currentRoom) return 0;
-  let all = null;
-  try { all = await TALENT_IDB.getAllFiles(); }
-  catch (e) { console.warn('[sync] 读取简历原文件失败', e); return 0; }
-  if (all === null) return 0; // 读取失败，不触碰云端
-  const ids = Object.keys(all);
-  if (ids.length === 0) {
-    // 本机无简历文件：清空云端该 room 的旧文件，保持镜像一致
-    await supabaseClient.from('sync_resume_files').delete().eq('room', currentRoom);
-    return 0;
-  }
-  const rows = [];
-  const skipped = [];
-  for (const id of ids) {
-    const f = all[id];
-    if (f && f.size && f.size > 8 * 1024 * 1024) { skipped.push(f.name || id); continue; }
-    try {
-      const dataUrl = await blobToBase64(f);
-      rows.push({ room: currentRoom, file_id: String(id), name: f.name || '', mime: f.type || '', data: dataUrl, updated_at: new Date().toISOString() });
-    } catch (e) { console.warn('[sync] 简历文件编码失败', id, e); }
-  }
-  if (rows.length) {
-    const res = await supabaseClient.from('sync_resume_files').upsert(rows, { onConflict: 'room,file_id' });
-    if (res.error) throw res.error;
-  }
-  if (skipped.length && window.toast) window.toast('⚠️ 跳过 ' + skipped.length + ' 个过大文件(>8MB)：' + skipped.join('、'));
-  return rows.length;
-}
-
-// 把云端简历原文件下载并写回本机 IndexedDB
-async function syncDownloadResumeFiles() {
-  if (!supabaseClient || !currentRoom) return 0;
-  const res = await supabaseClient.from('sync_resume_files').select('file_id,name,mime,data').eq('room', currentRoom);
-  if (res.error) { console.warn('[sync] 下载简历原文件失败', res.error); return 0; }
-  if (!res.data || !res.data.length) return 0;
-  let n = 0;
-  for (const row of res.data) {
-    try {
-      const blob = dataUrlToBlob(row.data);
-      await TALENT_IDB.putFile(row.file_id, blob);
-      n++;
-    } catch (e) { console.warn('[sync] 简历文件还原失败', row.file_id, e); }
-  }
-  return n;
-}
-
-// 退出同步：仅本机清除房间码，云端数据保留
-function syncClearRoom() {
-  currentRoom = '';
-  try { localStorage.removeItem(SYNC_ROOM_KEY); } catch (e) {}
-  if (window.toast) window.toast('已退出云同步（本机数据保留）');
-}
-
-function updateSyncUI() {
-  var statusEl = document.getElementById('syncStatus');
-  if (statusEl) statusEl.textContent = currentRoom ? ('同步码：' + currentRoom) : '未设置同步码';
-  var btn = document.getElementById('globalSyncBtn');
-  if (btn) btn.textContent = currentRoom ? '☁ 已同步' : '☁ 同步';
-}
-
-async function syncPullIfNewer() {
-  if (!supabaseClient || !currentRoom) return;
-  var res = await supabaseClient.from('sync_rooms').select('data, updated_at').eq('room', currentRoom).maybeSingle();
-  if (res.error || !res.data || !res.data.data) return;
-  var local = localStorage.getItem(STORAGE_KEY);
-  if (local && local === res.data.data) return;
-  try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
-  try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
-  if (window.toast) window.toast('☁ 已从云端同步最新数据');
-  location.reload();
-}
-
-async function initSync() {
-  if (!supabaseClient) return;
-  updateSyncUI();
-  if (currentRoom) {
-    // 已设过码：延迟静默拉取，远程有更新才刷新
-    setTimeout(function () {
-      syncPullIfNewer().catch(function (err) { console.warn('[sync] 启动拉取失败：', err); });
-    }, 1500);
-  }
-}
-
-// UI 绑定（弹窗 + 按钮）
-(function bindSyncUI() {
-  var modal = document.getElementById('syncModal');
-  var openBtn = document.getElementById('globalSyncBtn');
-  if (openBtn) openBtn.addEventListener('click', function () {
-    if (modal) modal.style.display = 'flex';
-    updateSyncUI();
-    var input = document.getElementById('syncRoom');
-    if (input && currentRoom) input.value = currentRoom;
-  });
-  if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
-  var closeBtn = document.getElementById('syncCloseBtn');
-  if (closeBtn) closeBtn.addEventListener('click', function () { if (modal) modal.style.display = 'none'; });
-  var downloadBtn = document.getElementById('syncDownloadBtn');
-  if (downloadBtn) downloadBtn.addEventListener('click', async function () {
-    var input = document.getElementById('syncRoom');
-    try {
-      await syncSetRoom(input.value); // 先记下同步码
-      await syncDownload();           // 再从云端拉到本机
-      if (window.toast) window.toast('✅ 已从云端下载，本机数据已更新');
-      if (modal) modal.style.display = 'none';
-    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
-  });
-  var uploadBtn = document.getElementById('syncUploadBtn');
-  if (uploadBtn) uploadBtn.addEventListener('click', async function () {
-    var input = document.getElementById('syncRoom');
-    try {
-      await syncSetRoom(input.value); // 先记下同步码
-      await syncUpload();             // 再把本机保存到云端
-      if (window.toast) window.toast('✅ 已保存到云端，其他设备输入相同同步码即可下载');
-      if (modal) modal.style.display = 'none';
-    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
-  });
-  var clearBtn = document.getElementById('syncClearBtn');
-  if (clearBtn) clearBtn.addEventListener('click', function () {
-    syncClearRoom();
-    if (modal) modal.style.display = 'none';
-  });
-})();
-
-// 暴露给全局（供其他模块 / 调试）
-window.syncSetRoom = syncSetRoom;
-window.syncUpload = syncUpload;
-window.syncDownload = syncDownload;
-window.syncClearRoom = syncClearRoom;
-window.syncStatus = function () { return currentRoom || null; };
-
-// 启动同步（已设码则静默拉取）
-initSync();
 
  // 一次性迁移：为已存在的书补齐默认状态
  function migrateReadingStatus() {
@@ -2653,7 +2631,7 @@ state.reading.books.push({
 id: 'book_' + Date.now(),
 title, author, totalPages, cover: '',
 });
-awardEnergy('book_add');
+awardEnergy('book_add', { title: title, author: author });
 saveData();
 renderReading();
 toast('✓ 已添加到书架');
@@ -4156,7 +4134,7 @@ function renderBackgroundSettings() {
  let focusTimerId = null; // setInterval 句柄
 
  // 能量兑换规则：每专注满 2 分钟（120 秒）兑换桌面宠物 1 点能量
- const FOCUS_ENERGY_PER_SEC = 1 / 120;
+ const FOCUS_ENERGY_PER_SEC = 1 / 40; // ⚡ 优化：每 40 秒专注换 1 点能量（原 120 秒），攒能量更快
 
  function ensureFocusState() {
  if (!state.focus) {
@@ -4556,59 +4534,35 @@ function renderBackgroundSettings() {
  req.onerror = () => reject(req.error);
  });
  },
-  async deleteFile(id) {
-    if (!id) return;
-    const db = await this._open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(this.store, 'readwrite');
-      tx.objectStore(this.store).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  },
-  // 读取全部简历原文件：{ fileId: File/Blob }
-  async getAllFiles() {
-    const db = await this._open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(this.store, 'readonly');
-      const store = tx.objectStore(this.store);
-      const valsReq = store.getAll();
-      const keysReq = store.getAllKeys();
-      let vals = [], keys = [];
-      valsReq.onsuccess = () => { vals = valsReq.result; };
-      keysReq.onsuccess = () => { keys = keysReq.result; };
-      tx.oncomplete = () => {
-        const map = {};
-        for (let i = 0; i < keys.length; i++) {
-          if (vals[i]) map[String(keys[i])] = vals[i];
-        }
-        resolve(map);
-      };
-      tx.onerror = () => reject(tx.error);
-    });
-  },
-};
+ async deleteFile(id) {
+ if (!id) return;
+ const db = await this._open();
+ return new Promise((resolve, reject) => {
+ const tx = db.transaction(this.store, 'readwrite');
+ tx.objectStore(this.store).delete(id);
+ tx.oncomplete = () => resolve();
+ tx.onerror = () => reject(tx.error);
+ });
+ },
+ // 取出全部简历原文件（key=file_id, value=Blob/File），供云同步打包
+ async getAllFiles() {
+ const db = await this._open();
+ return new Promise((resolve, reject) => {
+ const tx = db.transaction(this.store, 'readonly');
+ const store = tx.objectStore(this.store);
+ const map = {};
+ const req = store.openCursor();
+ req.onsuccess = () => {
+ const cursor = req.result;
+ if (cursor) { map[cursor.key] = cursor.value; cursor.continue(); }
+ else resolve(map);
+ };
+ req.onerror = () => reject(req.error);
+ });
+ },
+ };
 
-// 简历原文件 ↔ base64（用于云同步打包进云端）
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
-}
-function dataUrlToBlob(dataUrl) {
-  const [meta, b64] = String(dataUrl).split(',');
-  const m = meta.match(/data:([^;]+);base64/);
-  const mime = m ? m[1] : '';
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}
-
-// 全局弹窗助手：用事件委托接管 mask/close/cancel 关闭逻辑
+ // 全局弹窗助手：用事件委托接管 mask/close/cancel 关闭逻辑
  // 解决 onclick="$('#modalRoot')..." 字符串中 $ 找不到 window 引用的问题
  function openModal(html) {
  const root = $('#modalRoot');
@@ -6384,6 +6338,11 @@ const NAV_ICON_BASE64 = {
    var dash = document.getElementById('view-dashboard');
    if (dash && dash.classList.contains('active')) renderDesktopTimeline();
  });
+ // 跨模块操作写入时间线后，若桌面可见则即时刷新
+ window.addEventListener('timeline-changed', function () {
+   var dash = document.getElementById('view-dashboard');
+   if (dash && dash.classList.contains('active')) renderDesktopTimeline();
+ });
 
  // 番茄钟模块初始化（事件绑定 + 恢复进行中的计时）
  initFocus();
@@ -6683,6 +6642,20 @@ const NAV_ICON_BASE64 = {
  petSetPosition(window.innerWidth - PET.size - 20, window.innerHeight - PET.size - 20);
  petSetFacing('left');
  petSetActivity('idle');
+
+ // ⚡ 被动回血：即使不操作，能量也会缓慢恢复（避免宠物一直“饿死”）
+ if (!window.__energyRegenStarted) {
+   window.__energyRegenStarted = true;
+   setInterval(function () {
+     var m = state.mascot;
+     var cur = m.energy || 0;
+     if (cur < ENERGY_MAX) {
+       m.energy = Math.min(ENERGY_MAX, cur + ENERGY_REGEN_PER_TICK);
+       try { updateMascotStats(); } catch (e) {}
+       saveData();
+     }
+   }, ENERGY_REGEN_MS);
+ }
 
  // 等一秒钟开始自由走动
  setTimeout(() => {
@@ -6998,6 +6971,220 @@ const NAV_ICON_BASE64 = {
  PET.sprite.addEventListener('touchend', onUp);
  }
  }
+
+// ============================================================
+// 跨设备同步（Supabase · 共享同步码方案）
+// 免注册 / 免邮箱：两台设备输入【同一个同步码】即可互传数据。
+// 文字存 sync_rooms 表，简历原文件存 sync_resume_files 表。
+// ============================================================
+// Blob/File <-> dataURL 互转（用于简历原文件云同步）
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+function dataUrlToBlob(dataUrl) {
+  const idx = dataUrl.indexOf(',');
+  const head = dataUrl.slice(0, idx);
+  const body = dataUrl.slice(idx + 1);
+  const mimeMatch = head.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const bin = atob(body);
+  const len = bin.length;
+  const arr = new Uint8Array(len);
+  for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function schedulePush() {
+  if (_pushTimer) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(function () {
+    syncPush().catch(function (err) { console.warn('[sync] 上传失败：', err); });
+  }, 800);
+}
+
+async function syncPush() {
+  if (!supabaseClient || !currentRoom) return;
+  var payload = { room: currentRoom, data: JSON.stringify(state), updated_at: new Date().toISOString() };
+  var res = await supabaseClient.from('sync_rooms').upsert(payload, { onConflict: 'room' });
+  if (res.error) throw res.error;
+}
+
+async function syncPullAndReload() {
+  if (!supabaseClient || !currentRoom) return;
+  var res = await supabaseClient.from('sync_rooms').select('data').eq('room', currentRoom).maybeSingle();
+  if (res.error) { console.warn('[sync] 拉取失败：', res.error); return; }
+  if (res.data && res.data.data) {
+    try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
+    try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
+    location.reload();
+  }
+}
+
+// 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
+function syncSetRoom(room) {
+  room = (room || '').trim();
+  if (room.length < 3) throw new Error('同步码至少 3 位');
+  currentRoom = room;
+  try { localStorage.setItem(SYNC_ROOM_KEY, room); } catch (e) {}
+  updateSyncUI();
+}
+
+// 上传：把【本机】数据保存到云端（覆盖云端）。数据最全的那台设备用。
+async function syncUpload() {
+  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
+  await syncPush(); // 文字数据
+  try {
+    var n = await syncPushResumeFiles(); // 简历原文件
+    if (window.toast) window.toast('☁ 已保存到云端（含 ' + n + ' 份简历原文件）');
+  } catch (e) {
+    console.warn('[sync] 简历原文件上传失败', e);
+    if (window.toast) window.toast('⚠️ 文字已同步，简历原文件上传失败：' + (e.message || e));
+  }
+}
+
+// 下载：把【云端】数据拉到本机（覆盖本机）。新设备 / 想恢复数据时用。
+async function syncDownload() {
+  if (!supabaseClient || !currentRoom) throw new Error('请先输入同步码');
+  await syncPullAndReload();
+}
+
+// 把本机 IndexedDB 里的简历原文件上传到云端独立表（避免单包过大传失败）
+async function syncPushResumeFiles() {
+  if (!supabaseClient || !currentRoom) return 0;
+  let all = null;
+  try { all = await TALENT_IDB.getAllFiles(); }
+  catch (e) { console.warn('[sync] 读取简历原文件失败', e); return 0; }
+  if (all === null) return 0; // 读取失败，不触碰云端
+  const ids = Object.keys(all);
+  if (ids.length === 0) {
+    // 本机无简历文件：清空云端该 room 的旧文件，保持镜像一致
+    await supabaseClient.from('sync_resume_files').delete().eq('room', currentRoom);
+    return 0;
+  }
+  const rows = [];
+  const skipped = [];
+  for (const id of ids) {
+    const f = all[id];
+    if (f && f.size && f.size > 8 * 1024 * 1024) { skipped.push(f.name || id); continue; }
+    try {
+      const dataUrl = await blobToBase64(f);
+      rows.push({ room: currentRoom, file_id: String(id), name: f.name || '', mime: f.type || '', data: dataUrl, updated_at: new Date().toISOString() });
+    } catch (e) { console.warn('[sync] 简历文件编码失败', id, e); }
+  }
+  if (rows.length) {
+    const res = await supabaseClient.from('sync_resume_files').upsert(rows, { onConflict: 'room,file_id' });
+    if (res.error) throw res.error;
+  }
+  if (skipped.length && window.toast) window.toast('⚠️ 跳过 ' + skipped.length + ' 个过大文件(>8MB)：' + skipped.join('、'));
+  return rows.length;
+}
+
+// 把云端简历原文件下载并写回本机 IndexedDB
+async function syncDownloadResumeFiles() {
+  if (!supabaseClient || !currentRoom) return 0;
+  const res = await supabaseClient.from('sync_resume_files').select('file_id,name,mime,data').eq('room', currentRoom);
+  if (res.error) { console.warn('[sync] 下载简历原文件失败', res.error); return 0; }
+  if (!res.data || !res.data.length) return 0;
+  let n = 0;
+  for (const row of res.data) {
+    try {
+      const blob = dataUrlToBlob(row.data);
+      await TALENT_IDB.putFile(row.file_id, blob);
+      n++;
+    } catch (e) { console.warn('[sync] 简历文件还原失败', row.file_id, e); }
+  }
+  return n;
+}
+
+// 退出同步：仅本机清除房间码，云端数据保留
+function syncClearRoom() {
+  currentRoom = '';
+  try { localStorage.removeItem(SYNC_ROOM_KEY); } catch (e) {}
+  if (window.toast) window.toast('已退出云同步（本机数据保留）');
+}
+
+function updateSyncUI() {
+  var statusEl = document.getElementById('syncStatus');
+  if (statusEl) statusEl.textContent = currentRoom ? ('同步码：' + currentRoom) : '未设置同步码';
+  var btn = document.getElementById('globalSyncBtn');
+  if (btn) btn.textContent = currentRoom ? '☁ 已同步' : '☁ 同步';
+}
+
+async function syncPullIfNewer() {
+  if (!supabaseClient || !currentRoom) return;
+  var res = await supabaseClient.from('sync_rooms').select('data, updated_at').eq('room', currentRoom).maybeSingle();
+  if (res.error || !res.data || !res.data.data) return;
+  var local = localStorage.getItem(STORAGE_KEY);
+  if (local && local === res.data.data) return;
+  try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
+  try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
+  if (window.toast) window.toast('☁ 已从云端同步最新数据');
+  location.reload();
+}
+
+async function initSync() {
+  if (!supabaseClient) return;
+  updateSyncUI();
+  if (currentRoom) {
+    // 已设过码：延迟静默拉取，远程有更新才刷新
+    setTimeout(function () {
+      syncPullIfNewer().catch(function (err) { console.warn('[sync] 启动拉取失败：', err); });
+    }, 1500);
+  }
+}
+
+// UI 绑定（弹窗 + 按钮）
+(function bindSyncUI() {
+  var modal = document.getElementById('syncModal');
+  var openBtn = document.getElementById('globalSyncBtn');
+  if (openBtn) openBtn.addEventListener('click', function () {
+    if (modal) modal.style.display = 'flex';
+    updateSyncUI();
+    var input = document.getElementById('syncRoom');
+    if (input && currentRoom) input.value = currentRoom;
+  });
+  if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
+  var closeBtn = document.getElementById('syncCloseBtn');
+  if (closeBtn) closeBtn.addEventListener('click', function () { if (modal) modal.style.display = 'none'; });
+  var downloadBtn = document.getElementById('syncDownloadBtn');
+  if (downloadBtn) downloadBtn.addEventListener('click', async function () {
+    var input = document.getElementById('syncRoom');
+    try {
+      await syncSetRoom(input.value); // 先记下同步码
+      await syncDownload();           // 再从云端拉到本机
+      if (window.toast) window.toast('✅ 已从云端下载，本机数据已更新');
+      if (modal) modal.style.display = 'none';
+    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
+  });
+  var uploadBtn = document.getElementById('syncUploadBtn');
+  if (uploadBtn) uploadBtn.addEventListener('click', async function () {
+    var input = document.getElementById('syncRoom');
+    try {
+      await syncSetRoom(input.value); // 先记下同步码
+      await syncUpload();             // 再把本机保存到云端
+      if (window.toast) window.toast('✅ 已保存到云端，其他设备输入相同同步码即可下载');
+      if (modal) modal.style.display = 'none';
+    } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
+  });
+  var clearBtn = document.getElementById('syncClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    syncClearRoom();
+    if (modal) modal.style.display = 'none';
+  });
+})();
+
+// 暴露给全局（供其他模块 / 调试）
+window.syncSetRoom = syncSetRoom;
+window.syncUpload = syncUpload;
+window.syncDownload = syncDownload;
+window.syncClearRoom = syncClearRoom;
+window.syncStatus = function () { return currentRoom || null; };
+
+initSync();
 
  // DOM Ready
  if (document.readyState === 'loading') {
