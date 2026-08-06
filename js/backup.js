@@ -14,6 +14,7 @@
   // scope 用于在「像素工作台大对象」里定位子项（如日记/书架同属 pixel_workbench_v3）
   var KNOWN = [
     { key: 'pixel_workbench_v3',     label: '日记 & 书架阅读记录 & 打卡', scope: 'app' },
+    { key: 'pixel_workbench_timeline', label: '桌面·今日时间线',          scope: 'self' },
     { key: 'hannah_insp_fav',        label: '灵感收藏',                    scope: 'self' },
     { key: 'hannah_insp_user',       label: '灵感（我手动添加的）',        scope: 'self' },
     { key: 'takeout_list',           label: '外卖库',                      scope: 'self' },

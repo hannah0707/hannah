@@ -28,6 +28,7 @@ try { currentRoom = localStorage.getItem(SYNC_ROOM_KEY) || ''; } catch (e) {}
 // 工作日主状态(pixel_workbench_v3 内含：日记/打卡/书架/日程/健身/记账等)，以及各独立模块键
 const SYNC_BUNDLE_KEYS = [
   'pixel_workbench_v3',
+  'pixel_workbench_timeline',
   'hannah_insp_fav',
   'hannah_insp_user',
   'takeout_list',
