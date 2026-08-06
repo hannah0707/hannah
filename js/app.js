@@ -7083,11 +7083,22 @@ async function syncPullAndReload() {
     if (window.toast) window.toast('⚠️ 云端还没有同步码「' + currentRoom + '」的数据，请先在另一台设备点「📤 保存到云端」');
     return;
   }
+  // 写回本机存储
   try { localStorage.setItem(STORAGE_KEY, res.data.data); }
   catch (e) { if (window.toast) window.toast('⚠️ 本机存储写入失败：' + (e.message || e)); return; }
+  // 关键修复①：把下载的数据同步进当前运行的内存 state，避免 reload 前任何自动保存
+  // （saveData / 防抖上传定时器）把手机旧数据写回 localStorage 或上传覆盖云端，导致刷新后“白同步”
+  try {
+    var _dl = JSON.parse(res.data.data);
+    if (_dl && typeof _dl === 'object') {
+      for (var _k in _dl) { if (Object.prototype.hasOwnProperty.call(_dl, _k)) state[_k] = _dl[_k]; }
+    }
+  } catch (e) { console.warn('[sync] 下载数据合并到内存失败', e); }
+  // 关键修复②：取消待上传定时器，防止它把手机旧 state 上传覆盖云端
+  if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
   if (window.toast) window.toast('✅ 已从云端下载，正在刷新…');
-  setTimeout(function () { location.reload(); }, 1000); // 先让用户看到成功提示，再刷新
+  setTimeout(function () { try { location.href = location.href; } catch (e) { location.reload(); } }, 1000); // 先让用户看到成功提示，再强制刷新
 }
 
 // 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
@@ -7187,10 +7198,19 @@ async function syncPullIfNewer() {
   if (!res.data || !res.data.data) return;
   var local = localStorage.getItem(STORAGE_KEY);
   if (local && local === res.data.data) return;
+  // 写回本机存储
   try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
+  // 关键修复：同步进内存 state + 取消待上传定时器，避免 reload 前被旧数据覆盖
+  try {
+    var _dl = JSON.parse(res.data.data);
+    if (_dl && typeof _dl === 'object') {
+      for (var _k in _dl) { if (Object.prototype.hasOwnProperty.call(_dl, _k)) state[_k] = _dl[_k]; }
+    }
+  } catch (e) { console.warn('[sync] 启动拉取数据合并到内存失败', e); }
+  if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
   if (window.toast) window.toast('☁ 已从云端同步最新数据');
-  location.reload();
+  try { location.href = location.href; } catch (e) { location.reload(); }
 }
 
 async function initSync() {
