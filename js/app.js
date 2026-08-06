@@ -7153,6 +7153,23 @@ function _restoreBundle(rawData) {
   }
 }
 
+// 下载/拉取成功后：把本机存储重新载入内存并立即重渲染当前视图。
+// 关键：即便浏览器“刷新”因 bfcache 等并未真正重载脚本（iOS Safari 常见），
+// 用户也能立刻看到同步过来的数据，不必干等一次靠不住的 reload。
+function applySyncedData() {
+  // 重新从本机存储读取内存 state（覆盖下载前的内存数据）
+  try { state = loadData(); } catch (e) { console.warn('[sync] 重新载入内存 state 失败', e); }
+  // 立即重渲染当前活动视图，让“已下载”立刻可见
+  var active = $('.view.active');
+  var name = (active && active.id) ? active.id.replace('view-', '') : 'dashboard';
+  try { switchView(name); } catch (e) { console.warn('[sync] 重渲染当前视图失败', e); }
+  // 尽力让独立模块（健身/记账/日程/作品集）立即从已更新的 localStorage 重渲染，
+  // 让这些模块不必等 reload 也能立刻显示同步数据
+  try { if (typeof window.renderFitnessModule === 'function') window.renderFitnessModule(); } catch (e) {}
+  try { if (typeof window.renderFinanceModule === 'function') window.renderFinanceModule(); } catch (e) {}
+  try { if (typeof window.renderScheduleModule === 'function') window.renderScheduleModule(); } catch (e) {}
+}
+
 async function syncPullAndReload() {
   if (!supabaseClient || !currentRoom) throw new Error('同步未初始化，请刷新页面后重试');
   if (window.toast) window.toast('⏳ 正在从云端下载…');
@@ -7170,8 +7187,12 @@ async function syncPullAndReload() {
   // 关键修复②：取消待上传定时器，防止它把手机旧 state 上传覆盖云端
   if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
+  // 立即重渲染当前视图，让用户立刻看到同步结果（不依赖浏览器是否真的重载）
+  try { applySyncedData(); } catch (e) { console.warn('[sync] 应用同步数据失败', e); }
   if (window.toast) window.toast('✅ 已从云端下载（含全部模块数据），正在刷新…');
-  setTimeout(function () { try { location.href = location.href; } catch (e) { location.reload(); } }, 1000); // 先让用户看到成功提示，再强制刷新
+  // 真正重新加载页面，确保所有独立模块（健身/记账/日程/作品集等）也刷新；
+  // 用 location.reload() 而非 location.href=href——后者在 iOS Safari 上不保证重载脚本，会导致“白下载”
+  setTimeout(function () { try { location.reload(); } catch (e) {} }, 1200);
 }
 
 // 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
@@ -7280,8 +7301,10 @@ async function syncPullIfNewer() {
   if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
   try { localStorage.setItem(SYNC_LAST_AT_KEY, res.data.updated_at || new Date().toISOString()); } catch (e) {}
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
+  // 立即重渲染当前视图，让用户立刻看到同步结果
+  try { applySyncedData(); } catch (e) { console.warn('[sync] 应用同步数据失败', e); }
   if (window.toast) window.toast('☁ 已从云端同步最新数据');
-  try { location.href = location.href; } catch (e) { location.reload(); }
+  try { location.reload(); } catch (e) {}
 }
 
 async function initSync() {
