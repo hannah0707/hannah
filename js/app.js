@@ -5787,10 +5787,10 @@ if (added > 0) awardEnergy('talent_import', { count: added });
  </div>
  <div class="talent-form-grid">
  <div><label class="talent-form-label">📞 电话</label>
- <input class="talent-form-input" id="tpPhone" value="${escapeAttr(c.phone || '')}" placeholder="11位手机号">
+ <input class="talent-form-input" id="tpEditPhone" value="${escapeAttr(c.phone || '')}" placeholder="11位手机号">
  </div>
  <div><label class="talent-form-label">📧 邮箱</label>
- <input class="talent-form-input" id="tpEmail" value="${escapeAttr(c.email || '')}" placeholder="name@example.com">
+ <input class="talent-form-input" id="tpEditEmail" value="${escapeAttr(c.email || '')}" placeholder="name@example.com">
  </div>
  </div>
  <div class="talent-form-row">
@@ -5816,8 +5816,8 @@ if (added > 0) awardEnergy('talent_import', { count: added });
  years: ($('#tpYears').value || '').trim(),
  position: ($('#tpPosition').value || '').trim() || '未识别',
  expectedCity: ($('#tpExpectedCity').value || '').trim(),
- phone: ($('#tpPhone').value || '').trim(),
- email: ($('#tpEmail').value || '').trim(),
+      phone: ($('#tpEditPhone').value || '').trim(),
+      email: ($('#tpEditEmail').value || '').trim(),
  tags: ($('#tpTags').value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean),
  };
  if (!payload.name) { toast('⚠ 请填写姓名'); return; }
