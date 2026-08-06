@@ -8,6 +8,7 @@
  <meta name="apple-mobile-web-app-status-bar-style" content="default">
  <meta name="description" content="Hannah 的像素工作台 · 13 个模块，纯前端 + localStorage，4 套主题配色，手机、电脑、平板都能用。">
  <meta name="keywords" content="像素工作台,像素风,日程,记账,健身,日记,作品集,人才库,阅读,资讯,localStorage">
+ <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
  <!-- Open Graph -->
  <meta property="og:title" content="Hannah 的像素工作台">
  <meta property="og:description" content="13 个模块 · 纯前端 · 4 套主题 · 一键备份/恢复">
@@ -17,7 +18,7 @@
  <meta name="twitter:card" content="summary_large_image">
  <meta name="twitter:image" content="assets/icons/og-cover.png">
  <title> Hannah 的像素工作台</title>
- <link rel="stylesheet" href="css/style.css?v=20260808">
+ <link rel="stylesheet" href="css/style.css?v=20260806b">
  <!-- Favicon：优先 SVG（矢量），各 PNG 尺寸覆盖老浏览器/iOS/Android -->
  <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg">
  <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png">
@@ -871,44 +872,44 @@
  <div class="theme-cards" id="themeCardsPopover"></div>
  </div>
 
- <script src="js/data.js?v=20260808"></script>
- <script src="js/api.js?v=20260808"></script>
+ <script src="js/data.js?v=20260806b"></script>
+ <script src="js/api.js?v=20260806b"></script>
  <!-- 今日书单推荐：书籍预置数据 + 推荐逻辑（纯前端） -->
- <script src="js/books.js?v=20260808"></script>
- <script src="js/bookRecommend.js?v=20260808"></script>
- <script src="js/inspirations.js?v=20260808"></script>
- <script src="js/inspiration.js?v=20260808"></script>
+ <script src="js/books.js?v=20260806b"></script>
+ <script src="js/bookRecommend.js?v=20260806b"></script>
+ <script src="js/inspirations.js?v=20260806b"></script>
+ <script src="js/inspiration.js?v=20260806b"></script>
  <!-- 生活页面：外卖推荐 + 喝水记录 + 食谱 + 生理期（纯前端） -->
- <script src="js/takeout.js?v=20260808"></script>
- <script src="js/water.js?v=20260808"></script>
- <script src="js/recipe.js?v=20260808"></script>
- <script src="js/period.js?v=20260808"></script>
- <script src="js/life.js?v=20260808"></script>
+ <script src="js/takeout.js?v=20260806b"></script>
+ <script src="js/water.js?v=20260806b"></script>
+ <script src="js/recipe.js?v=20260806b"></script>
+ <script src="js/period.js?v=20260806b"></script>
+ <script src="js/life.js?v=20260806b"></script>
  <!-- 资讯页面：每日速览 + 随机破茧房 + 常识补全库（纯前端） -->
- <script src="js/vision_data.js?v=20260808"></script>
- <script src="js/vision.js?v=20260808"></script>
+ <script src="js/vision_data.js?v=20260806b"></script>
+ <script src="js/vision.js?v=20260806b"></script>
  <!-- AI 助手：设置 + 对话（纯前端 OpenAI 兼容，API Key 仅存本地、仅发往用户填写的官方地址） -->
- <script src="js/ai_helper.js?v=20260808"></script>
+ <script src="js/ai_helper.js?v=20260806b"></script>
  <!-- 跨设备同步所需 Supabase 客户端 -->
- <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
- <script src="js/app.js?v=20260808"></script>
+ <!-- 跨设备同步已改为内置 REST 客户端，无需任何外部 CDN（国内网络也能稳定连） -->
+ <script src="js/app.js?v=20260806b"></script>
  <!-- 全局增强模块（纯前端，独立文件，不改动原有业务读写逻辑） -->
- <script src="js/backup.js?v=20260808"></script>
- <script src="js/quicknote.js?v=20260808"></script>
- <script src="js/inspiration_add.js?v=20260808"></script>
- <script src="js/takeout_enhance.js?v=20260808"></script>
+ <script src="js/backup.js?v=20260806b"></script>
+ <script src="js/quicknote.js?v=20260806b"></script>
+ <script src="js/inspiration_add.js?v=20260806b"></script>
+ <script src="js/takeout_enhance.js?v=20260806b"></script>
  <!-- 作品集模块（人物库 / 世界观设定 / 灵感素材库 / 作品） -->
- <script src="js/portfolio.js?v=20260808"></script>
- <script src="js/portfolio_chars.js?v=20260808"></script>
- <script src="js/portfolio_world.js?v=20260808"></script>
- <script src="js/portfolio_insp.js?v=20260808"></script>
+ <script src="js/portfolio.js?v=20260806b"></script>
+ <script src="js/portfolio_chars.js?v=20260806b"></script>
+ <script src="js/portfolio_world.js?v=20260806b"></script>
+ <script src="js/portfolio_insp.js?v=20260806b"></script>
  <!-- 健身模块（纯前端 localStorage 单文件，详见 js/fitness_app.js 顶部注释） -->
- <script src="js/fitness_app.js?v=20260808"></script>
+ <script src="js/fitness_app.js?v=20260806b"></script>
  <!-- 记账模块（纯前端 localStorage 单文件，详见 js/finance_app.js 顶部注释）
       必须放在 fitness_app.js 之后：需要包装 window.renderFitnessModule 注入「健身花销」卡片 -->
- <script src="js/finance_app.js?v=20260808"></script>
+ <script src="js/finance_app.js?v=20260806b"></script>
 <!-- 日程模块（纯前端 localStorage 单文件，详见 js/schedule_app.js 顶部注释）
      必须放在 finance_app.js 之后：与其他模块桥接一致，且依赖 app.js 暴露的 window.toast/showModal/saveData 等全局助手 -->
-<script src="js/schedule_app.js?v=20260808"></script>
+<script src="js/schedule_app.js?v=20260806b"></script>
 </body>
 </html>

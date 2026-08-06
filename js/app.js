@@ -23,10 +23,71 @@ let currentRoom = '';
 let _pushTimer = null;
 const SYNC_ROOM_KEY = 'pixel_sync_room';
 try { currentRoom = localStorage.getItem(SYNC_ROOM_KEY) || ''; } catch (e) {}
-if (SYNC_ENABLED && typeof window.supabase !== 'undefined') {
-  try {
-    supabaseClient = window.supabase.createClient(SYNC_SUPABASE_URL, SYNC_SUPABASE_ANON_KEY);
-  } catch (e) { console.warn('[sync] supabase 初始化失败：', e); supabaseClient = null; }
+
+// ---- 内置轻量 REST 客户端（不依赖任何外部 CDN，国内网络也能稳定连）----
+function _syncReq(method, url, body, prefer) {
+  var h = {
+    'apikey': SYNC_SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SYNC_SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json'
+  };
+  if (prefer) h['Prefer'] = prefer;
+  return fetch(url, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined })
+    .then(function (r) {
+      return r.text().then(function (txt) {
+        var j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = txt; }
+        if (!r.ok) {
+          var m = (j && j.message) ? j.message : ('HTTP ' + r.status);
+          return { error: new Error(m), data: null };
+        }
+        return { error: null, data: j };
+      });
+    });
+}
+// 模仿 supabase-js 的链式调用：from(t).select(c).eq(c,v).maybeSingle() / .upsert(rows,{onConflict}) / .delete().eq()
+function _syncFrom(table) {
+  var spec = { table: table, op: 'select', sel: '*', filters: [], single: false, body: null, onConflict: 'room' };
+  var api = {
+    select: function (c) { spec.op = 'select'; spec.sel = c; return api; },
+    eq: function (c, v) { spec.filters.push(c + '=eq.' + encodeURIComponent(v)); return api; },
+    maybeSingle: function () { spec.single = true; return api; },
+    order: function () { return api; },
+    upsert: function (rows, opts) { spec.op = 'upsert'; spec.body = rows; spec.onConflict = (opts && opts.onConflict) || 'room'; return api; },
+    delete: function () { spec.op = 'delete'; return api; }
+  };
+  api.then = function (resolve) {
+    var base = SYNC_SUPABASE_URL + '/rest/v1/' + spec.table;
+    var method, query = '', body = null, prefer = null;
+    if (spec.op === 'select') {
+      method = 'GET';
+      query = '?select=' + encodeURIComponent(spec.sel) + (spec.filters.length ? ('&' + spec.filters.join('&')) : '');
+    } else if (spec.op === 'upsert') {
+      method = 'POST';
+      query = '?on_conflict=' + encodeURIComponent(spec.onConflict);
+      body = spec.body; prefer = 'resolution=merge-duplicates';
+    } else { // delete
+      method = 'DELETE';
+      query = spec.filters.length ? ('?' + spec.filters.join('&')) : '';
+    }
+    return _syncReq(method, base + query, body, prefer).then(function (r) {
+      if (r.error) return resolve({ error: r.error, data: null });
+      var d = r.data;
+      if (spec.single) d = (d && d.length) ? d[0] : (d || null);
+      return resolve({ error: null, data: d });
+    });
+  };
+  return api;
+}
+
+if (SYNC_ENABLED) {
+  // 优先用官方 SDK（若 CDN 加载成功）；否则用内置客户端，保证一定能连上
+  if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+    try { supabaseClient = window.supabase.createClient(SYNC_SUPABASE_URL, SYNC_SUPABASE_ANON_KEY); } catch (e) {}
+  }
+  if (!supabaseClient || !supabaseClient.from) {
+    supabaseClient = { from: _syncFrom };
+    console.warn('[sync] 已启用内置 REST 客户端（无需外部 CDN）');
+  }
 }
 const defaultData = {
  nickname: 'Hannah',
@@ -7026,7 +7087,7 @@ async function syncPullAndReload() {
 
 // 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
 function syncSetRoom(room) {
-  room = (room || '').trim();
+  room = (room || '').replace(/\s+/g, '').toLowerCase(); // 去空格+转小写，避免手机键盘大写或手误导致房间不一致
   if (room.length < 3) throw new Error('同步码至少 3 位');
   currentRoom = room;
   try { localStorage.setItem(SYNC_ROOM_KEY, room); } catch (e) {}
@@ -7117,7 +7178,8 @@ function updateSyncUI() {
 async function syncPullIfNewer() {
   if (!supabaseClient || !currentRoom) return;
   var res = await supabaseClient.from('sync_rooms').select('data, updated_at').eq('room', currentRoom).maybeSingle();
-  if (res.error || !res.data || !res.data.data) return;
+  if (res.error) { console.warn('[sync] 启动拉取失败：', res.error); if (window.toast) window.toast('⚠️ 云同步失败：' + (res.error.message || res.error)); return; }
+  if (!res.data || !res.data.data) return;
   var local = localStorage.getItem(STORAGE_KEY);
   if (local && local === res.data.data) return;
   try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
@@ -7127,7 +7189,12 @@ async function syncPullIfNewer() {
 }
 
 async function initSync() {
-  if (!supabaseClient) return;
+  if (!supabaseClient) {
+    console.warn('[sync] 同步客户端未初始化，云同步不可用');
+    var _b = document.getElementById('globalSyncBtn');
+    if (_b) { _b.textContent = '☁ 同步(离线)'; _b.style.background = '#bbb'; }
+    return;
+  }
   updateSyncUI();
   if (currentRoom) {
     // 已设过码：延迟静默拉取，远程有更新才刷新
