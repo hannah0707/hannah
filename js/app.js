@@ -7075,14 +7075,19 @@ async function syncPush() {
 }
 
 async function syncPullAndReload() {
-  if (!supabaseClient || !currentRoom) return;
+  if (!supabaseClient || !currentRoom) throw new Error('同步未初始化，请刷新页面后重试');
+  if (window.toast) window.toast('⏳ 正在从云端下载…');
   var res = await supabaseClient.from('sync_rooms').select('data').eq('room', currentRoom).maybeSingle();
-  if (res.error) { console.warn('[sync] 拉取失败：', res.error); return; }
-  if (res.data && res.data.data) {
-    try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
-    try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
-    location.reload();
+  if (res.error) { if (window.toast) window.toast('❌ 下载失败：' + (res.error.message || res.error)); return; }
+  if (!res.data || !res.data.data) {
+    if (window.toast) window.toast('⚠️ 云端还没有同步码「' + currentRoom + '」的数据，请先在另一台设备点「📤 保存到云端」');
+    return;
   }
+  try { localStorage.setItem(STORAGE_KEY, res.data.data); }
+  catch (e) { if (window.toast) window.toast('⚠️ 本机存储写入失败：' + (e.message || e)); return; }
+  try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
+  if (window.toast) window.toast('✅ 已从云端下载，正在刷新…');
+  setTimeout(function () { location.reload(); }, 1000); // 先让用户看到成功提示，再刷新
 }
 
 // 设置同步码：仅记录房间码，不自动上传/下载（避免新设备把云端数据冲掉）
@@ -7222,9 +7227,7 @@ async function initSync() {
     var input = document.getElementById('syncRoom');
     try {
       await syncSetRoom(input.value); // 先记下同步码
-      await syncDownload();           // 再从云端拉到本机
-      if (window.toast) window.toast('✅ 已从云端下载，本机数据已更新');
-      if (modal) modal.style.display = 'none';
+      await syncDownload();           // 再从云端拉到本机（成功会自行提示并刷新）
     } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
   });
   var uploadBtn = document.getElementById('syncUploadBtn');
@@ -7232,8 +7235,7 @@ async function initSync() {
     var input = document.getElementById('syncRoom');
     try {
       await syncSetRoom(input.value); // 先记下同步码
-      await syncUpload();             // 再把本机保存到云端
-      if (window.toast) window.toast('✅ 已保存到云端，其他设备输入相同同步码即可下载');
+      await syncUpload();             // 再把本机保存到云端（函数内已提示成功）
       if (modal) modal.style.display = 'none';
     } catch (e) { if (window.toast) window.toast('❌ ' + (e.message || e)); }
   });
