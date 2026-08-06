@@ -24,6 +24,38 @@ let _pushTimer = null;
 const SYNC_ROOM_KEY = 'pixel_sync_room';
 try { currentRoom = localStorage.getItem(SYNC_ROOM_KEY) || ''; } catch (e) {}
 
+// 全量同步覆盖的 localStorage 键（与 backup.js 的 KNOWN 清单对齐，确保“全部数据”都能跨设备同步）
+// 工作日主状态(pixel_workbench_v3 内含：日记/打卡/书架/日程/健身/记账等)，以及各独立模块键
+const SYNC_BUNDLE_KEYS = [
+  'pixel_workbench_v3',
+  'hannah_insp_fav',
+  'hannah_insp_user',
+  'takeout_list',
+  'takeout_blacklist',
+  'water_setting',
+  'water_records',
+  'recipe_list',
+  'period_records',
+  'vision_collect',
+  'vision_readRecord',
+  'vision_random_history',
+  'hannah_pf_chars',
+  'hannah_pf_world',
+  'hannah_pf_insp',
+  'hannahFit:records',
+  'hannahFit:plans',
+  'hannahFit:exercises',
+  'hannahFit:body',
+  'hannahFit:videos',
+  'hannahFit:settings',
+  'hannahFin:cats',
+  'hannahFin:budgets',
+  'hannahFin:tpls',
+  'hannahFin:ui'
+];
+// 记录最近一次成功同步（下载/上传）的云端 updated_at，避免开机自动拉取造成无限刷新
+const SYNC_LAST_AT_KEY = 'pixel_sync_last_at';
+
 // ---- 内置轻量 REST 客户端（不依赖任何外部 CDN，国内网络也能稳定连）----
 function _syncReq(method, url, body, prefer) {
   var h = {
@@ -7069,9 +7101,56 @@ function schedulePush() {
 
 async function syncPush() {
   if (!supabaseClient || !currentRoom) return;
-  var payload = { room: currentRoom, data: JSON.stringify(state), updated_at: new Date().toISOString() };
+  // 全量打包：读取所有用户数据键（含主状态 + 健身/记账/灵感/作品集/外卖/视野/喝水等）
+  var keys = {};
+  for (var i = 0; i < SYNC_BUNDLE_KEYS.length; i++) {
+    var k = SYNC_BUNDLE_KEYS[i];
+    try { keys[k] = localStorage.getItem(k); } catch (e) { keys[k] = null; }
+  }
+  var nowISO = new Date().toISOString();
+  var bundle = { __sync_bundle__: true, v: 2, keys: keys };
+  var payload = { room: currentRoom, data: JSON.stringify(bundle), updated_at: nowISO };
   var res = await supabaseClient.from('sync_rooms').upsert(payload, { onConflict: 'room' });
   if (res.error) throw res.error;
+  // 记录本次上传时间，避免开机自动拉取时又把自己刚传的拉回来导致无限刷新
+  try { localStorage.setItem(SYNC_LAST_AT_KEY, nowISO); } catch (e) {}
+}
+
+// 把云端 data（兼容“全量包”与旧版“纯主状态”两种格式）写回本机存储，并合并进内存 state
+function _restoreBundle(rawData) {
+  var parsed = null;
+  try { parsed = JSON.parse(rawData); } catch (e) { parsed = null; }
+  if (parsed && parsed.__sync_bundle__ && parsed.keys) {
+    // 新版全量格式：逐个键写回本机
+    var lastErr = null;
+    for (var k in parsed.keys) {
+      if (!Object.prototype.hasOwnProperty.call(parsed.keys, k)) continue;
+      try {
+        if (parsed.keys[k] === null || parsed.keys[k] === undefined) { try { localStorage.removeItem(k); } catch (e) {} }
+        else localStorage.setItem(k, parsed.keys[k]);
+      } catch (e) { lastErr = e; console.warn('[sync] 还原键失败 ' + k, e); }
+    }
+    // 把主状态合并进当前运行的内存 state，避免 reload 前被旧数据覆盖（关键修复①）
+    try {
+      var main = parsed.keys['pixel_workbench_v3'];
+      if (main) {
+        var ms = JSON.parse(main);
+        if (ms && typeof ms === 'object') {
+          for (var _k in ms) { if (Object.prototype.hasOwnProperty.call(ms, _k)) state[_k] = ms[_k]; }
+        }
+      }
+    } catch (e) { console.warn('[sync] 主状态合并到内存失败', e); }
+    if (lastErr) throw lastErr; // 有写入失败（如容量超限）则抛出，让上层提示
+  } else {
+    // 旧版格式（纯主状态 JSON 字符串）：仅写回主状态
+    localStorage.setItem(STORAGE_KEY, rawData);
+    try {
+      var _dl = JSON.parse(rawData);
+      if (_dl && typeof _dl === 'object') {
+        for (var _k2 in _dl) { if (Object.prototype.hasOwnProperty.call(_dl, _k2)) state[_k2] = _dl[_k2]; }
+      }
+    } catch (e) { console.warn('[sync] 旧数据合并到内存失败', e); }
+  }
 }
 
 async function syncPullAndReload() {
@@ -7083,21 +7162,15 @@ async function syncPullAndReload() {
     if (window.toast) window.toast('⚠️ 云端还没有同步码「' + currentRoom + '」的数据，请先在另一台设备点「📤 保存到云端」');
     return;
   }
-  // 写回本机存储
-  try { localStorage.setItem(STORAGE_KEY, res.data.data); }
+  // 写回本机存储（全量：主状态 + 健身/记账/灵感/作品集/外卖/视野/喝水等所有模块）
+  try { _restoreBundle(res.data.data); }
   catch (e) { if (window.toast) window.toast('⚠️ 本机存储写入失败：' + (e.message || e)); return; }
-  // 关键修复①：把下载的数据同步进当前运行的内存 state，避免 reload 前任何自动保存
-  // （saveData / 防抖上传定时器）把手机旧数据写回 localStorage 或上传覆盖云端，导致刷新后“白同步”
-  try {
-    var _dl = JSON.parse(res.data.data);
-    if (_dl && typeof _dl === 'object') {
-      for (var _k in _dl) { if (Object.prototype.hasOwnProperty.call(_dl, _k)) state[_k] = _dl[_k]; }
-    }
-  } catch (e) { console.warn('[sync] 下载数据合并到内存失败', e); }
+  // 记录本次下载时间，避免开机自动拉取时又把刚下载的拉回导致无限刷新
+  try { localStorage.setItem(SYNC_LAST_AT_KEY, res.data.updated_at || new Date().toISOString()); } catch (e) {}
   // 关键修复②：取消待上传定时器，防止它把手机旧 state 上传覆盖云端
   if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
-  if (window.toast) window.toast('✅ 已从云端下载，正在刷新…');
+  if (window.toast) window.toast('✅ 已从云端下载（含全部模块数据），正在刷新…');
   setTimeout(function () { try { location.href = location.href; } catch (e) { location.reload(); } }, 1000); // 先让用户看到成功提示，再强制刷新
 }
 
@@ -7196,18 +7269,16 @@ async function syncPullIfNewer() {
   var res = await supabaseClient.from('sync_rooms').select('data, updated_at').eq('room', currentRoom).maybeSingle();
   if (res.error) { console.warn('[sync] 启动拉取失败：', res.error); if (window.toast) window.toast('⚠️ 云同步失败：' + (res.error.message || res.error)); return; }
   if (!res.data || !res.data.data) return;
-  var local = localStorage.getItem(STORAGE_KEY);
-  if (local && local === res.data.data) return;
-  // 写回本机存储
-  try { localStorage.setItem(STORAGE_KEY, res.data.data); } catch (e) {}
-  // 关键修复：同步进内存 state + 取消待上传定时器，避免 reload 前被旧数据覆盖
-  try {
-    var _dl = JSON.parse(res.data.data);
-    if (_dl && typeof _dl === 'object') {
-      for (var _k in _dl) { if (Object.prototype.hasOwnProperty.call(_dl, _k)) state[_k] = _dl[_k]; }
-    }
-  } catch (e) { console.warn('[sync] 启动拉取数据合并到内存失败', e); }
+  // 已是最新（云端 updated_at 不晚于本机记录）则跳过，避免无限刷新
+  var lastAt = '';
+  try { lastAt = localStorage.getItem(SYNC_LAST_AT_KEY) || ''; } catch (e) {}
+  if (res.data.updated_at && lastAt && res.data.updated_at <= lastAt) return;
+  // 写回本机存储（全量）
+  try { _restoreBundle(res.data.data); }
+  catch (e) { console.warn('[sync] 启动拉取写回失败', e); return; }
+  // 关键修复：取消待上传定时器，避免 reload 前被旧数据覆盖
   if (_pushTimer) { try { clearTimeout(_pushTimer); } catch (e) {} _pushTimer = null; }
+  try { localStorage.setItem(SYNC_LAST_AT_KEY, res.data.updated_at || new Date().toISOString()); } catch (e) {}
   try { await syncDownloadResumeFiles(); } catch (e) { console.warn('[sync] 简历原文件还原失败', e); }
   if (window.toast) window.toast('☁ 已从云端同步最新数据');
   try { location.href = location.href; } catch (e) { location.reload(); }
